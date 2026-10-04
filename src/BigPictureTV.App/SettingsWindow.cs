@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using BigPictureTV.Core;
+using BigPictureTV.Core.Audio;
 using BigPictureTV.Core.Detection;
 using BigPictureTV.Core.Display;
 using BigPictureTV.Core.Input;
@@ -31,7 +32,10 @@ public sealed class SettingsWindow : Window
     readonly List<(RadioButton Button, DisplayInfo Display)> _tvChoices = new();
     readonly RadioButton _tvOnly, _tvPrimary, _duplicate;
     readonly TextBox _grace, _extra;
-    readonly CheckBox _startup, _desktopWhenHidden, _rumble;
+    readonly CheckBox _startup, _desktopWhenHidden, _rumble, _switchAudio, _shortcutOpensBp, _checkUpdates;
+    readonly ComboBox _audioDevice;
+    readonly Expander _advanced;
+    readonly IReadOnlyList<AudioDevice> _audioOutputs;
     readonly TextBlock _testMessage;
     readonly TextBox _hotkeyBox;
     readonly TextBlock _hotkeyMessage;
@@ -52,9 +56,10 @@ public sealed class SettingsWindow : Window
     /// <param name="controllerButtons">Buttons held right now on any controller; null if none is connected.</param>
     public SettingsWindow(AppSettings settings, IReadOnlyList<DisplayInfo> displays, bool firstRun,
         bool startWithWindows, Func<AppSettings, bool> test, Func<bool> canTest, Func<Hotkey, bool> hotkeyAvailable,
-        Func<GamepadButtons?> controllerButtons)
+        Func<GamepadButtons?> controllerButtons, IReadOnlyList<AudioDevice> audioOutputs)
     {
         _controllerButtons = controllerButtons;
+        _audioOutputs = audioOutputs;
         _hotkeyAvailable = hotkeyAvailable;
         _draft = settings.Clone();
         _displays = displays;
@@ -69,6 +74,7 @@ public sealed class SettingsWindow : Window
         FontSize = 14;
 
         var root = new StackPanel { Margin = new Thickness(20) };
+        var advanced = new StackPanel { Margin = new Thickness(0, 4, 0, 0) };
         var guess = TvDetector.Guess(displays);
 
         if (firstRun)
@@ -121,7 +127,7 @@ public sealed class SettingsWindow : Window
             IsChecked = _draft.DesktopWhenBigPictureHidden,
             Margin = new Thickness(0, 8, 0, 0),
         };
-        root.Children.Add(_desktopWhenHidden);
+        advanced.Children.Add(_desktopWhenHidden);
 
         // Keyboard shortcut.
         root.Children.Add(Heading(S.HotkeyGroup));
@@ -146,7 +152,7 @@ public sealed class SettingsWindow : Window
         ShowHotkey();
 
         // Controller combo.
-        root.Children.Add(Heading(S.ComboGroup));
+        advanced.Children.Add(Heading(S.ComboGroup));
         _combo = GamepadCombo.Parse(_draft.ControllerCombo) ?? GamepadButtons.None;
         var comboRow = new StackPanel { Orientation = Orientation.Horizontal };
         _comboBox = new TextBox { IsReadOnly = true, Width = 220 };
@@ -157,10 +163,10 @@ public sealed class SettingsWindow : Window
         var noCombo = Button(S.ComboNone);
         noCombo.Click += (_, _) => { StopComboCapture(); _combo = GamepadButtons.None; _comboMessage!.Text = ""; ShowCombo(); };
         comboRow.Children.Add(noCombo);
-        root.Children.Add(comboRow);
+        advanced.Children.Add(comboRow);
         _comboMessage = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = System.Windows.Media.Brushes.Firebrick };
-        root.Children.Add(_comboMessage);
-        root.Children.Add(new TextBlock
+        advanced.Children.Add(_comboMessage);
+        advanced.Children.Add(new TextBlock
         {
             Text = string.Format(S.ComboHint, GamepadCombo.Hold.TotalSeconds),
             FontSize = 12,
@@ -168,26 +174,66 @@ public sealed class SettingsWindow : Window
             TextWrapping = TextWrapping.Wrap,
         });
         _rumble = new CheckBox { Content = S.ComboRumble, IsChecked = _draft.ControllerRumble, Margin = new Thickness(0, 6, 0, 0) };
-        root.Children.Add(_rumble);
+        advanced.Children.Add(_rumble);
         _comboTimer.Tick += (_, _) => ComboCaptureTick();
         Closed += (_, _) => _comboTimer.Stop();
         ShowCombo();
 
-        // The rest.
-        root.Children.Add(Heading(""));
+        // The rest of the advanced options.
+        advanced.Children.Add(Heading(S.AudioGroup));
+        _switchAudio = new CheckBox
+        {
+            Content = new TextBlock { Text = S.SwitchAudio, TextWrapping = TextWrapping.Wrap },
+            IsChecked = _draft.SwitchAudio,
+        };
+        advanced.Children.Add(_switchAudio);
+        _audioDevice = new ComboBox { Margin = new Thickness(20, 4, 0, 0), IsEnabled = _draft.SwitchAudio };
+        var tvName = TvSelector.Select(displays, _draft).Tv?.Name;
+        var autoAudio = AudioPicker.Pick(_audioOutputs, "", tvName);
+        _audioDevice.Items.Add(string.Format(S.AudioAutomatic, autoAudio?.Name ?? S.DetectedNone));
+        foreach (var output in _audioOutputs) _audioDevice.Items.Add(output);
+        var pickedAudio = _audioOutputs.FirstOrDefault(o => o.Id == _draft.AudioDeviceId);
+        _audioDevice.SelectedItem = (object?)pickedAudio ?? _audioDevice.Items[0];
+        _switchAudio.Checked += (_, _) => _audioDevice.IsEnabled = true;
+        _switchAudio.Unchecked += (_, _) => _audioDevice.IsEnabled = false;
+        advanced.Children.Add(_audioDevice);
+
+        advanced.Children.Add(Heading(S.OpenBigPictureGroup));
+        _shortcutOpensBp = new CheckBox
+        {
+            Content = new TextBlock { Text = S.ShortcutOpensBigPicture, TextWrapping = TextWrapping.Wrap },
+            IsChecked = _draft.ShortcutOpensBigPicture,
+        };
+        advanced.Children.Add(_shortcutOpensBp);
+
+        advanced.Children.Add(Heading(S.OtherGroup));
         var graceRow = new StackPanel { Orientation = Orientation.Horizontal };
         graceRow.Children.Add(new TextBlock { Text = S.GraceLabel, VerticalAlignment = VerticalAlignment.Center });
         _grace = new TextBox { Text = _draft.GraceSeconds.ToString(), Width = 50, Margin = new Thickness(8, 0, 0, 0) };
         graceRow.Children.Add(_grace);
-        root.Children.Add(graceRow);
+        advanced.Children.Add(graceRow);
 
-        root.Children.Add(new TextBlock { Text = S.ExtraLabel, Margin = new Thickness(0, 10, 0, 2), TextWrapping = TextWrapping.Wrap });
+        advanced.Children.Add(new TextBlock { Text = S.ExtraLabel, Margin = new Thickness(0, 10, 0, 2), TextWrapping = TextWrapping.Wrap });
         _extra = new TextBox { Text = string.Join(", ", _draft.ExtraProcesses), ToolTip = S.ExtraHint };
-        root.Children.Add(_extra);
-        root.Children.Add(new TextBlock { Text = S.ExtraHint, FontSize = 12, Opacity = 0.7 });
+        advanced.Children.Add(_extra);
+        advanced.Children.Add(new TextBlock { Text = S.ExtraHint, FontSize = 12, Opacity = 0.7 });
 
         _startup = new CheckBox { Content = S.StartWithWindows, IsChecked = startWithWindows, Margin = new Thickness(0, 12, 0, 0) };
         root.Children.Add(_startup);
+
+        _checkUpdates = new CheckBox
+        {
+            Content = new TextBlock { Text = string.Format(S.CheckForUpdates, UpdateChecker.Current.ToString(3)), TextWrapping = TextWrapping.Wrap },
+            IsChecked = _draft.CheckForUpdates,
+            Margin = new Thickness(0, 10, 0, 0),
+        };
+        advanced.Children.Add(_checkUpdates);
+        root.Children.Add(_advanced = new Expander
+        {
+            Header = new TextBlock { Text = S.AdvancedGroup, FontWeight = FontWeights.SemiBold, FontSize = 15 },
+            Content = advanced,
+            Margin = new Thickness(0, 16, 0, 0),
+        });
 
         // Buttons.
         _testMessage = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0), Foreground = System.Windows.Media.Brushes.Firebrick };
@@ -314,6 +360,7 @@ public sealed class SettingsWindow : Window
 
         if (!int.TryParse(_grace.Text.Trim(), out int grace) || grace < 0 || grace > 600)
         {
+            _advanced.IsExpanded = true;
             _grace.Focus();
             _grace.SelectAll();
             return false;
@@ -321,6 +368,10 @@ public sealed class SettingsWindow : Window
         _draft.GraceSeconds = grace;
         _draft.Hotkey = _hotkey?.ToString() ?? "";
         _draft.ControllerRumble = _rumble.IsChecked == true;
+        _draft.SwitchAudio = _switchAudio.IsChecked == true;
+        _draft.AudioDeviceId = (_audioDevice.SelectedItem as AudioDevice)?.Id ?? "";
+        _draft.ShortcutOpensBigPicture = _shortcutOpensBp.IsChecked == true;
+        _draft.CheckForUpdates = _checkUpdates.IsChecked == true;
         _draft.ControllerCombo = _combo == GamepadButtons.None ? "" : GamepadCombo.Format(_combo);
         _draft.DesktopWhenBigPictureHidden = _desktopWhenHidden.IsChecked == true;
         _draft.ExtraProcesses = BigPictureWatcher.NormalizeProcessNames(new[] { _extra.Text }).ToList();

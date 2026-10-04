@@ -27,6 +27,13 @@ public sealed class ModeController
 
     DateTime? _closedSince;
 
+    // After opening Big Picture ourselves: Steam can take a while to show it,
+    // so it doesn't count as closed until this time.
+    DateTime? _launchingUntil;
+
+    /// <summary>How long to wait for Big Picture to appear after <see cref="OpenBigPicture"/>.</summary>
+    public TimeSpan LaunchWait { get; set; } = TimeSpan.FromSeconds(45);
+
     // Consecutive checks that found the displays no longer TV-only.
     int _mismatches;
 
@@ -94,7 +101,8 @@ public sealed class ModeController
 
                 case DisplayMode.TvAuto:
                     if (LayoutLeftTv(bigPictureOpen, MismatchesToConfirm)) break;
-                    if (bigPictureOpen) { _closedSince = null; break; }
+                    if (bigPictureOpen) { _closedSince = null; _launchingUntil = null; break; }
+                    if (now < _launchingUntil) break; // still starting
                     if (_closedSince == null)
                     {
                         _closedSince = now;
@@ -145,6 +153,30 @@ public sealed class ModeController
                 // The user turned it off on purpose: don't switch back until Big Picture closes and reopens.
                 _suppressed = bigPictureOpen;
             }
+        }
+    }
+
+    /// <summary>
+    /// Switches to the TV ahead of opening Big Picture (the caller opens it),
+    /// so Steam starts on the TV. Goes back to the desktop when Big Picture
+    /// closes, or if it never shows up. False if the switch failed.
+    /// </summary>
+    public bool OpenBigPicture(DateTime now)
+    {
+        lock (_gate)
+        {
+            if (Mode == DisplayMode.Desktop)
+            {
+                if (!_switcher.SwitchToTv()) return false;
+                _suppressed = true;
+                SetMode(DisplayMode.TvAuto);
+            }
+            if (Mode == DisplayMode.TvAuto)
+            {
+                _closedSince = null;
+                _launchingUntil = now + LaunchWait;
+            }
+            return true;
         }
     }
 
@@ -208,6 +240,7 @@ public sealed class ModeController
     {
         _switcher.RestoreDesktop();
         _closedSince = null;
+        _launchingUntil = null;
         SetMode(DisplayMode.Desktop);
     }
 

@@ -1,9 +1,11 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using SynchronizationContext = System.Threading.SynchronizationContext;
 using System.Windows.Forms;
 using BigPictureTV.Core;
+using BigPictureTV.Core.Audio;
 using BigPictureTV.Core.Detection;
 using BigPictureTV.Core.Display;
 using BigPictureTV.Core.Input;
@@ -30,6 +32,9 @@ public sealed class TrayApp : IDisposable
     readonly GamepadService _gamepad;
     bool _testing;
     DateTime _hotkeyQuietUntil;
+    readonly Timer _updateTimer = new() { Interval = 60_000 };
+    (string Tag, string Url)? _update;
+    string? _balloonUrl;
     readonly string _exePath = Environment.ProcessPath ?? Application.ExecutablePath;
     bool _disposed;
 
@@ -47,6 +52,7 @@ public sealed class TrayApp : IDisposable
         // right-click did nothing: build it once now, and allow the opening.
         _icon.ContextMenuStrip.Opening += (_, e) => { SyncWithDisplays(); BuildMenu(); e.Cancel = false; };
         _icon.MouseDoubleClick += (_, e) => { if (e.Button == MouseButtons.Left) Toggle(); };
+        _icon.BalloonTipClicked += (_, _) => { if (_balloonUrl != null) OpenUrl(_balloonUrl); };
         _controller.ModeChanged += OnModeChanged;
         _controller.LayoutChangedOutside += () => Notify(S.ChangedOutside, ToolTipIcon.Info);
         _controller.LeavingTvSoon += wait => Notify(string.Format(S.LeavingTvSoon, (int)Math.Round(wait.TotalSeconds)), ToolTipIcon.None);
@@ -56,6 +62,7 @@ public sealed class TrayApp : IDisposable
         var (tv, reason) = TvSelector.Select(_display.ListDisplays(), _settings);
         _log.Write($"BigPictureTV started (TV: {tv?.ToString() ?? "not found"}, {reason}).");
         _controller.Start(_probe.IsOpen());
+        if (_controller.Mode == DisplayMode.Desktop) RestoreAudio(); // left over from a crash
         UpdateIcon();
 
         _timer = new Timer { Interval = Math.Clamp(_settings.PollSeconds, 1, 60) * 1000 };
@@ -73,6 +80,10 @@ public sealed class TrayApp : IDisposable
         _gamepad = new GamepadService(log, () => ui.Post(_ => OnToggleShortcut(), null));
         ApplyCombo();
         BuildMenu();
+
+        // First look a minute after starting, then once a day.
+        _updateTimer.Tick += (_, _) => { _updateTimer.Interval = 24 * 60 * 60 * 1000; CheckForUpdates(); };
+        _updateTimer.Start();
 
         if (!_settings.FirstRunDone)
         {
@@ -105,7 +116,7 @@ public sealed class TrayApp : IDisposable
             var result = WpfDialogs.ShowSettings(_settings, _display.ListDisplays(), firstRun,
                 StartupRegistration.IsEnabled, TestSettings,
                 () => _controller.Mode == DisplayMode.Desktop && !_store.HasSaved,
-                _hotkeys.IsAvailable, () => _gamepad.Pressed);
+                _hotkeys.IsAvailable, () => _gamepad.Pressed, AudioOutputs.List());
             if (result is { } saved)
             {
                 ApplySettings(saved.Settings);
@@ -168,8 +179,93 @@ public sealed class TrayApp : IDisposable
     void OnToggleShortcut()
     {
         if (_testing || DateTime.UtcNow < _hotkeyQuietUntil) return;
-        Toggle();
+        if (_settings.ShortcutOpensBigPicture && _controller.Mode == DisplayMode.Desktop) OpenBigPicture();
+        else Toggle();
         _hotkeyQuietUntil = DateTime.UtcNow.AddSeconds(1.5);
+    }
+
+    /// <summary>Switches to the TV first, then opens Big Picture, so Steam starts on the TV.</summary>
+    void OpenBigPicture()
+    {
+        try
+        {
+            if (!_controller.OpenBigPicture(DateTime.UtcNow)) Notify(S.SwitchFailed, ToolTipIcon.Warning);
+        }
+        catch (Exception e)
+        {
+            _log.Write($"Switching for Big Picture failed: {e.Message}");
+        }
+        try
+        {
+            Process.Start(new ProcessStartInfo("steam://open/bigpicture") { UseShellExecute = true })?.Dispose();
+            _log.Write("Opening Big Picture.");
+        }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            _log.Write($"Opening Big Picture failed: {e.Message}");
+            Notify(S.SteamNotFound, ToolTipIcon.Warning);
+        }
+    }
+
+    // The sound follows the picture: to the TV's output while on it, back to
+    // whatever it was afterwards. The previous output is kept in a file so a
+    // crash on the TV still gets it back next start.
+    void MoveAudioToTv()
+    {
+        if (!_settings.SwitchAudio) return;
+        try
+        {
+            var outputs = AudioOutputs.List();
+            var tvName = TvSelector.Select(_display.ListDisplays(), _settings).Tv?.Name;
+            var target = AudioPicker.Pick(outputs, _settings.AudioDeviceId, tvName);
+            if (target == null)
+            {
+                _log.Write("No sound output matches the TV; pick one in Settings.");
+                return;
+            }
+            string? current = AudioOutputs.DefaultId();
+            if (current == null || current == target.Id) return;
+            if (!File.Exists(AppPaths.AudioFile)) File.WriteAllText(AppPaths.AudioFile, current);
+            _log.Write(AudioOutputs.SetDefault(target.Id) ? $"Sound moved to {target}." : $"Windows refused to move the sound to {target}.");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            _log.Write($"Moving the sound failed: {e.Message}");
+        }
+    }
+
+    void RestoreAudio()
+    {
+        try
+        {
+            if (!File.Exists(AppPaths.AudioFile)) return;
+            string id = File.ReadAllText(AppPaths.AudioFile).Trim();
+            File.Delete(AppPaths.AudioFile);
+            var previous = AudioOutputs.List().FirstOrDefault(d => d.Id == id);
+            if (previous == null) return; // unplugged meanwhile; leave Windows' choice
+            _log.Write(AudioOutputs.SetDefault(id) ? $"Sound back on {previous}." : $"Windows refused to put the sound back on {previous}.");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _log.Write($"Putting the sound back failed: {e.Message}");
+        }
+    }
+
+    async void CheckForUpdates()
+    {
+        if (!_settings.CheckForUpdates || _disposed) return;
+        var found = await UpdateChecker.FindNewerAsync(_log);
+        MemoryTrim.Soon();
+        if (found == null || found == _update || _disposed) return;
+        _update = found;
+        _log.Write($"Version {found.Value.Tag} is available.");
+        Notify(string.Format(S.UpdateAvailable, found.Value.Tag), ToolTipIcon.Info, found.Value.Url);
+    }
+
+    static void OpenUrl(string url)
+    {
+        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })?.Dispose(); }
+        catch (System.ComponentModel.Win32Exception) { }
     }
 
     void Emergency()
@@ -247,11 +343,17 @@ public sealed class TrayApp : IDisposable
 
     void OnModeChanged(DisplayMode mode)
     {
+        if (mode == DisplayMode.Desktop) RestoreAudio();
+        else MoveAudioToTv();
         UpdateIcon();
         Notify(mode == DisplayMode.Desktop ? S.NowOnDesktop : S.NowOnTv, ToolTipIcon.None);
     }
 
-    void Notify(string text, ToolTipIcon kind) => _icon.ShowBalloonTip(3000, "BigPictureTV", text, kind);
+    void Notify(string text, ToolTipIcon kind, string? url = null)
+    {
+        _balloonUrl = url;
+        _icon.ShowBalloonTip(3000, "BigPictureTV", text, kind);
+    }
 
     void UpdateIcon()
     {
@@ -291,6 +393,10 @@ public sealed class TrayApp : IDisposable
         toggle.Click += (_, _) => Toggle();
         menu.Items.Add(toggle);
 
+        var openBp = new ToolStripMenuItem(S.OpenBigPicture);
+        openBp.Click += (_, _) => OpenBigPicture();
+        menu.Items.Add(openBp);
+
         var pause = new ToolStripMenuItem(S.PauseAutomatic) { Checked = _controller.Paused };
         pause.Click += (_, _) => { _controller.SetPaused(!_controller.Paused); UpdateIcon(); };
         menu.Items.Add(pause);
@@ -308,6 +414,13 @@ public sealed class TrayApp : IDisposable
         var logs = new ToolStripMenuItem(S.OpenLogFolder);
         logs.Click += (_, _) => Process.Start(new ProcessStartInfo(AppPaths.DataDir) { UseShellExecute = true });
         menu.Items.Add(logs);
+
+        if (_update is { } update)
+        {
+            var download = new ToolStripMenuItem(string.Format(S.DownloadUpdate, update.Tag));
+            download.Click += (_, _) => OpenUrl(update.Url);
+            menu.Items.Add(download);
+        }
 
         menu.Items.Add(new ToolStripSeparator());
         var exit = new ToolStripMenuItem(S.Exit);
@@ -363,6 +476,7 @@ public sealed class TrayApp : IDisposable
         if (_disposed) return;
         _disposed = true;
         _timer.Stop();
+        _updateTimer.Dispose();
         _hotkeys.Dispose();
         _gamepad.Dispose();
         try { _controller.Shutdown(); }

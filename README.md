@@ -69,6 +69,8 @@ and double-click it.
   GameSir Nova Lite changes mode with Back+Start+LB and drops off the PC).
 - The menu also has: settings, pause automatic switching, choose the TV (or
   leave it on automatic detection), start with Windows, and open the log folder.
+- **Open Big Picture on the TV** switches first and then opens Big Picture, so
+  Steam starts on the TV.
 - Exiting always puts the desktop back.
 - If Windows turns the other displays back on by itself (the TV went to
   standby, Win+P), the app notices and goes back to desktop mode. It switches
@@ -81,15 +83,23 @@ is the TV. There you can:
 - Choose what happens when Big Picture opens: only the TV (default), the TV as
   the main display with the others still on, or the same picture on every
   display.
-- Choose whether stepping away from Big Picture without closing it (Windows
-  key, Alt+Tab) goes back to the desktop. Off by default.
 - Pick the keyboard shortcut: click the box and press the combination. If
   another program already uses it, the window says so.
-- Pick the controller buttons: press **Record** and hold them together.
-- Set how long to wait after Big Picture closes, and list programs, such as
-  emulators, that should also use the TV.
 - Press **Test** to see it right away. It goes back to the desktop by itself
   after 15 seconds.
+
+Under **Advanced options**:
+
+- Move the sound to the TV too, and back afterwards. It picks the output named
+  after the TV, or the one you choose.
+- Make the keyboard shortcut and the controller combo open Big Picture as well.
+- The controller combo: press **Record** and hold the buttons together.
+- Whether stepping away from Big Picture without closing it (Windows key,
+  Alt+Tab) goes back to the desktop. Off by default.
+- How long to wait after Big Picture closes, and programs, such as emulators,
+  that should also use the TV.
+- A notice when a new version is out on GitHub. It never downloads or installs
+  anything by itself.
 
 If you installed the PowerShell watcher with `Install.ps1`, uninstall it first
 (`Install.ps1 -Uninstall`). Only one of them can run at a time.

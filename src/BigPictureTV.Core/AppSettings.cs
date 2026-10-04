@@ -59,6 +59,18 @@ public sealed class AppSettings
     /// </summary>
     public bool ControllerRumble { get; set; }
 
+    /// <summary>Also move the sound to the TV while on it, and put it back after.</summary>
+    public bool SwitchAudio { get; set; }
+
+    /// <summary>Sound output to use on the TV. Empty: the one named after the TV.</summary>
+    public string AudioDeviceId { get; set; } = "";
+
+    /// <summary>The keyboard shortcut and controller combo also open Big Picture when switching to the TV.</summary>
+    public bool ShortcutOpensBigPicture { get; set; }
+
+    /// <summary>Look for a new version on GitHub now and then, and say so (never installs anything).</summary>
+    public bool CheckForUpdates { get; set; } = true;
+
     /// <summary>Process names (without .exe) that also keep the TV-only layout while they run.</summary>
     public List<string> ExtraProcesses { get; set; } = new();
 

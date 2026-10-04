@@ -8,5 +8,6 @@ public static class AppPaths
 
     public static string LayoutFile => Path.Combine(DataDir, "saved-layout.json");
     public static string LogFile => Path.Combine(DataDir, "BigPictureTV.log");
+    public static string AudioFile => Path.Combine(DataDir, "saved-audio.txt");
     public static string SettingsFile => Path.Combine(DataDir, "settings.json");
 }

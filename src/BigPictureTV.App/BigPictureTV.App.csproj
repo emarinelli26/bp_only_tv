@@ -11,6 +11,7 @@
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AssemblyName>BigPictureTV</AssemblyName>
+    <Version>0.6.0</Version>
     <RootNamespace>BigPictureTV.App</RootNamespace>
     <StartupObject>BigPictureTV.App.Program</StartupObject>
     <!-- An idle tray app: no background GC thread, smaller heaps. -->
