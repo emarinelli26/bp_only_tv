@@ -16,10 +16,13 @@ sealed class FakeSwitcher : IDisplaySwitcher
     public int Switches { get; private set; }
     public int Restores { get; private set; }
 
+    /// <summary>What the displays really show; set to false to simulate Windows bringing the desktop back.</summary>
+    public bool TvOnly { get; set; }
+
     public bool SwitchToTv()
     {
         Switches++;
-        if (SwitchSucceeds) HasSavedLayout = true;
+        if (SwitchSucceeds) { HasSavedLayout = true; TvOnly = true; }
         return SwitchSucceeds;
     }
 
@@ -27,7 +30,12 @@ sealed class FakeSwitcher : IDisplaySwitcher
     {
         Restores++;
         HasSavedLayout = false;
+        TvOnly = false;
     }
+
+    public bool IsTvOnly() => TvOnly;
+
+    public void ForgetSavedLayout() => HasSavedLayout = false;
 }
 
 sealed class FakeDisplayConfig : IDisplayConfig

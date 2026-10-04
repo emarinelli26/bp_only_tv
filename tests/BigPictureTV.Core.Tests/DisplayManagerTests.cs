@@ -76,6 +76,32 @@ public sealed class DisplayManagerTests : IDisposable
     }
 
     [Fact]
+    public void IsTvOnlyReadsTheRealDisplays()
+    {
+        _manager.SwitchToTv();
+        _display.Displays[0] = Displays.Monitor with { Active = false };
+        Assert.True(_manager.IsTvOnly());
+
+        _display.Displays[0] = Displays.Monitor; // Windows turned the monitor back on
+        Assert.False(_manager.IsTvOnly());
+
+        _display.Displays[0] = Displays.Monitor;
+        _display.Displays[1] = Displays.LgTv with { Active = false }; // only the monitor
+        Assert.False(_manager.IsTvOnly());
+    }
+
+    [Fact]
+    public void IsTvOnlyFollowsTheDisplayWeSwitchedToEvenIfTheChoiceChanges()
+    {
+        var settings = new AppSettings();
+        var manager = new DisplayManager(_display, _store, ds => TvSelector.Select(ds, settings), _log);
+        manager.SwitchToTv();
+        _display.Displays[0] = Displays.Monitor with { Active = false };
+        settings.TvDevicePath = Displays.Monitor.DevicePath; // user picks another TV while on the TV
+        Assert.True(manager.IsTvOnly());
+    }
+
+    [Fact]
     public void NormalizesExtraProcessNames()
     {
         Assert.Equal(new[] { "retroarch", "dolphin", "pcsx2" },

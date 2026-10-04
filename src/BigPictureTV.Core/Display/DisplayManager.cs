@@ -11,6 +11,12 @@ public interface IDisplaySwitcher
 
     /// <summary>Puts the saved desktop layout back, falling back to Extend.</summary>
     void RestoreDesktop();
+
+    /// <summary>True if, right now, the TV is the only active display.</summary>
+    bool IsTvOnly();
+
+    /// <summary>Drops the saved layout without applying it (the desktop is already back).</summary>
+    void ForgetSavedLayout();
 }
 
 /// <summary>Switches between the desktop layout and TV only. Ported from BigPictureTV.ps1.</summary>
@@ -20,6 +26,10 @@ public sealed class DisplayManager : IDisplaySwitcher
     readonly LayoutStore _store;
     readonly Func<IReadOnlyList<DisplayInfo>, (DisplayInfo? Tv, string Reason)> _selectTv;
     readonly ILog _log;
+
+    // Device path of the display we switched to, so changing the chosen TV
+    // in the settings while on the TV doesn't look like the layout changed.
+    string? _switchedTo;
 
     public DisplayManager(IDisplayConfig display, LayoutStore store,
         Func<IReadOnlyList<DisplayInfo>, (DisplayInfo? Tv, string Reason)> selectTv, ILog log)
@@ -55,6 +65,7 @@ public sealed class DisplayManager : IDisplaySwitcher
             current.Paths[0].targetInfo.adapterId.HighPart == layout.Paths[0].targetInfo.adapterId.HighPart)
         {
             _log.Write("The TV is already the only display.");
+            _switchedTo = tv.DevicePath;
             return true;
         }
 
@@ -73,7 +84,23 @@ public sealed class DisplayManager : IDisplaySwitcher
             return false;
         }
         _log.Write($"Switched to TV only: {tv} ({reason}).");
+        _switchedTo = tv.DevicePath;
         return true;
+    }
+
+    public bool IsTvOnly()
+    {
+        var displays = _display.ListDisplays();
+        var active = displays.Where(d => d.Active).ToList();
+        if (active.Count != 1) return false;
+        string? tvPath = _switchedTo ?? _selectTv(displays).Tv?.DevicePath;
+        return string.Equals(active[0].DevicePath, tvPath, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public void ForgetSavedLayout()
+    {
+        _store.Delete();
+        _switchedTo = null;
     }
 
     public void RestoreDesktop()
@@ -86,6 +113,7 @@ public sealed class DisplayManager : IDisplaySwitcher
                 if (err == 0)
                 {
                     _store.Delete();
+                    _switchedTo = null;
                     _log.Write("Restored saved layout.");
                     return;
                 }
@@ -103,6 +131,7 @@ public sealed class DisplayManager : IDisplaySwitcher
         if (extendErr == 0)
         {
             _store.Delete();
+            _switchedTo = null;
             _log.Write("Restored the last extended layout.");
         }
         else
