@@ -1,10 +1,17 @@
 name: release
 
-# Pushing a tag like v1.0.0 builds the exes from that commit and creates a
-# draft release with them; it goes public when someone presses Publish.
+# Pushing a tag like v1.0.0, or running this workflow by hand from the Actions
+# tab with a version, builds the exes from that commit and creates a draft
+# release with them; it goes public when someone presses Publish (which also
+# creates the tag when the run was started by hand).
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, for example v1.0.0'
+        required: true
 
 permissions:
   contents: write
@@ -17,9 +24,16 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-      - name: Version from tag
+      - name: Version from tag or input
         shell: bash
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          TAG="${INPUT_VERSION:-$GITHUB_REF_NAME}"
+          [[ "$TAG" == v* ]] || TAG="v$TAG"
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Bad version: $TAG"; exit 1; }
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "VERSION=${TAG#v}" >> "$GITHUB_ENV"
       - run: dotnet test -c Release
       - run: dotnet publish src/BigPictureTV.App -c Release -r win-x64 -o publish -p:Version=${{ env.VERSION }}
       - run: dotnet publish src/BigPictureTV.Cli -c Release -r win-x64 -o publish -p:Version=${{ env.VERSION }}
@@ -31,5 +45,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: >
-          gh release create "$GITHUB_REF_NAME" publish/BigPictureTV.exe publish/bptv.exe publish/SHA256SUMS.txt
-          --draft --title "BigPictureTV $GITHUB_REF_NAME" --generate-notes
+          gh release create "$TAG" publish/BigPictureTV.exe publish/bptv.exe publish/SHA256SUMS.txt
+          --target "$GITHUB_SHA" --draft --title "BigPictureTV $TAG" --generate-notes
