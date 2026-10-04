@@ -43,7 +43,9 @@ public sealed class TrayApp : IDisposable
         _probe = NewProbe();
 
         _icon = new NotifyIcon { ContextMenuStrip = new ContextMenuStrip(), Visible = true };
-        _icon.ContextMenuStrip.Opening += (_, _) => { SyncWithDisplays(); BuildMenu(); };
+        // WinForms cancels opening a menu that has no items yet, so the first
+        // right-click did nothing: build it once now, and allow the opening.
+        _icon.ContextMenuStrip.Opening += (_, e) => { SyncWithDisplays(); BuildMenu(); e.Cancel = false; };
         _icon.MouseDoubleClick += (_, e) => { if (e.Button == MouseButtons.Left) Toggle(); };
         _controller.ModeChanged += OnModeChanged;
         _controller.LayoutChangedOutside += () => Notify(S.ChangedOutside, ToolTipIcon.Info);
@@ -70,6 +72,7 @@ public sealed class TrayApp : IDisposable
         var ui = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
         _gamepad = new GamepadService(log, () => ui.Post(_ => OnToggleShortcut(), null));
         ApplyCombo();
+        BuildMenu();
 
         if (!_settings.FirstRunDone)
         {

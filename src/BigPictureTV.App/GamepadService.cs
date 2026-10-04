@@ -25,6 +25,7 @@ sealed class GamepadService : IDisposable
     readonly ManualResetEventSlim _stop = new();
     readonly ComboDetector[] _detectors = new ComboDetector[MaxControllers];
     readonly bool[] _connected = new bool[MaxControllers];
+    uint _lastError;
     volatile int _pressed = -1;
     bool _available = true;
 
@@ -60,7 +61,8 @@ sealed class GamepadService : IDisposable
                 var buttons = Read(i);
                 bool was = _connected[i];
                 _connected[i] = buttons != null;
-                if (was != _connected[i]) _log.Write($"Controller {i + 1} {(_connected[i] ? "connected" : "disconnected")}.");
+                if (was != _connected[i])
+                    _log.Write(_connected[i] ? $"Controller {i + 1} connected." : $"Controller {i + 1} disconnected (XInput error {_lastError}).");
                 if (buttons == null) continue;
 
                 pressed = (pressed < 0 ? 0 : pressed) | (int)buttons.Value;
@@ -80,7 +82,8 @@ sealed class GamepadService : IDisposable
     {
         try
         {
-            if (XInputGetState((uint)index, out var state) != ERROR_SUCCESS) return null;
+            _lastError = XInputGetState((uint)index, out var state);
+            if (_lastError != ERROR_SUCCESS) return null;
             var buttons = (GamepadButtons)(state.Gamepad.wButtons & ~0x0C00); // drop undocumented bits we reuse
             if (state.Gamepad.bLeftTrigger >= TriggerThreshold) buttons |= GamepadButtons.LT;
             if (state.Gamepad.bRightTrigger >= TriggerThreshold) buttons |= GamepadButtons.RT;
