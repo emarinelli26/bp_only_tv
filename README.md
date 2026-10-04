@@ -4,6 +4,8 @@ Keep Steam Big Picture on the TV, and only on the TV.
 
 *[Leer en español](README.es.md)*
 
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/emarinelli)
+
 When Big Picture opens, BigPictureTV switches your displays so Big Picture, and
 the games and emulators you launch from it, land on the TV instead of the
 monitor or spanned across both. When Big Picture closes, your normal desktop

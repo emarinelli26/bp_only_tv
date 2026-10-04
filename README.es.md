@@ -4,6 +4,8 @@ Steam Big Picture en la TV, y solo en la TV.
 
 *[Read in English](README.md)*
 
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-apoy%C3%A1%20el%20proyecto-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/emarinelli)
+
 Cuando se abre Big Picture, BigPictureTV cambia las pantallas para que Big
 Picture, y los juegos y emuladores que abras desde ahí, aparezcan en la TV en
 lugar del monitor o repartidos entre los dos. Cuando cerrás Big Picture, vuelve
