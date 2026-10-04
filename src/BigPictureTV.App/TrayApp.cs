@@ -25,8 +25,9 @@ public sealed class TrayApp : IDisposable
     BigPictureWatcher _probe;
     readonly NotifyIcon _icon;
     readonly Timer _timer;
-    readonly HotkeyService _hotkeys = new();
+    readonly HotkeyService _hotkeys;
     bool _testing;
+    DateTime _hotkeyQuietUntil;
     readonly string _exePath = Environment.ProcessPath ?? Application.ExecutablePath;
     bool _disposed;
 
@@ -44,6 +45,7 @@ public sealed class TrayApp : IDisposable
         _icon.MouseDoubleClick += (_, e) => { if (e.Button == MouseButtons.Left) Toggle(); };
         _controller.ModeChanged += OnModeChanged;
         _controller.LayoutChangedOutside += () => Notify(S.ChangedOutside, ToolTipIcon.Info);
+        _controller.LeavingTvSoon += wait => Notify(string.Format(S.LeavingTvSoon, (int)Math.Round(wait.TotalSeconds)), ToolTipIcon.None);
 
         StartupRegistration.RefreshPath(_exePath);
 
@@ -56,7 +58,8 @@ public sealed class TrayApp : IDisposable
         _timer.Tick += (_, _) => Check();
         _timer.Start();
 
-        _hotkeys.TogglePressed += () => { if (!_testing) Toggle(); };
+        _hotkeys = new HotkeyService(log);
+        _hotkeys.TogglePressed += OnToggleHotkey;
         _hotkeys.EmergencyPressed += Emergency;
         if (!_hotkeys.RegisterEmergency())
             _log.Write($"Emergency shortcut {Hotkey.Emergency} is taken by another program.");
@@ -138,6 +141,15 @@ public sealed class TrayApp : IDisposable
         }
         _log.Write($"Keyboard shortcut {hotkey} is taken by another program.");
         Notify(string.Format(S.HotkeyTakenNotify, hotkey), ToolTipIcon.Warning);
+    }
+
+    // Switching displays takes a moment; a second press in the meantime
+    // (or right after) would undo the first.
+    void OnToggleHotkey()
+    {
+        if (_testing || DateTime.UtcNow < _hotkeyQuietUntil) return;
+        Toggle();
+        _hotkeyQuietUntil = DateTime.UtcNow.AddSeconds(1.5);
     }
 
     void Emergency()

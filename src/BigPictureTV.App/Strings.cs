@@ -52,6 +52,7 @@ public sealed class Strings
     public string TestBack { get; init; } = "";
     public string TestSeconds { get; init; } = "";
     public string TestFailed { get; init; } = "";
+    public string LeavingTvSoon { get; init; } = "";
     public string HotkeyGroup { get; init; } = "";
     public string HotkeyHint { get; init; } = "";
     public string HotkeyNone { get; init; } = "";
@@ -107,6 +108,7 @@ public sealed class Strings
         TestBack = "Back to the desktop",
         TestSeconds = "Going back to the desktop in {0} s.",
         TestFailed = "Couldn't switch to that display. Check that it's on and connected.",
+        LeavingTvSoon = "Big Picture closed. Going back to the desktop in {0} s…",
         HotkeyGroup = "Keyboard shortcut to switch between the TV and the desktop",
         HotkeyHint = "Click the box and press the combination. {0} always brings the desktop back.",
         HotkeyNone = "No shortcut",
@@ -163,6 +165,7 @@ public sealed class Strings
         TestBack = "Volver al escritorio",
         TestSeconds = "Volviendo al escritorio en {0} s.",
         TestFailed = "No se pudo pasar a esa pantalla. Revisá que esté encendida y conectada.",
+        LeavingTvSoon = "Se cerró Big Picture. Volviendo al escritorio en {0} s…",
         HotkeyGroup = "Atajo de teclado para cambiar entre la TV y el escritorio",
         HotkeyHint = "Hacé clic en el cuadro y presioná la combinación. {0} siempre vuelve al escritorio.",
         HotkeyNone = "Sin atajo",

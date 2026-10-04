@@ -34,6 +34,17 @@ public class ModeControllerTests
     }
 
     [Fact]
+    public void ClosingAnnouncesTheWaitOnce()
+    {
+        var waits = new List<TimeSpan>();
+        _c.LeavingTvSoon += waits.Add;
+        _c.Tick(true, T0);
+        _c.Tick(false, T0.AddSeconds(1));
+        _c.Tick(false, T0.AddSeconds(3));
+        Assert.Equal(new[] { TimeSpan.FromSeconds(5) }, waits);
+    }
+
+    [Fact]
     public void ReopeningWithinTheGraceKeepsTheTv()
     {
         _c.Tick(true, T0);
