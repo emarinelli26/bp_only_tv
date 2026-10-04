@@ -13,6 +13,9 @@
     <AssemblyName>BigPictureTV</AssemblyName>
     <RootNamespace>BigPictureTV.App</RootNamespace>
     <StartupObject>BigPictureTV.App.Program</StartupObject>
+    <!-- An idle tray app: no background GC thread, smaller heaps. -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
   </PropertyGroup>
 
   <!-- dotnet publish -r win-x64 gives one self-contained BigPictureTV.exe; no .NET install needed. -->

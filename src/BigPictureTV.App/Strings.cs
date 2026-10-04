@@ -27,6 +27,7 @@ public sealed class Strings
     public string NowOnDesktop { get; init; } = "";
     public string SwitchFailed { get; init; } = "";
     public string ChangedOutside { get; init; } = "";
+    public string DesktopWhenHidden { get; init; } = "";
     public string Settings { get; init; } = "";
     public string SettingsTitle { get; init; } = "";
     public string Welcome { get; init; } = "";
@@ -74,6 +75,7 @@ public sealed class Strings
         SwitchFailed = "Couldn't switch to the TV. Check that it's on, or pick it under TV.",
         ChangedOutside = "Windows turned the other displays back on. Big Picture will switch to the TV again next time it opens.",
         Settings = "Settings…",
+        DesktopWhenHidden = "Go back to the desktop when I leave Big Picture (Windows key, Alt+Tab, minimize), not only when it closes",
         SettingsTitle = "BigPictureTV settings",
         Welcome = "Welcome! When Steam Big Picture opens, BigPictureTV moves everything to the TV, and puts your desktop back when it closes.",
         WelcomeDetected = "We think your TV is {0}. Check it below and press Test to see it in action.",
@@ -121,6 +123,7 @@ public sealed class Strings
         SwitchFailed = "No se pudo pasar a la TV. Revisá que esté encendida o elegila en el menú TV.",
         ChangedOutside = "Windows volvió a encender las otras pantallas. La próxima vez que abras Big Picture pasa a la TV de nuevo.",
         Settings = "Ajustes…",
+        DesktopWhenHidden = "Volver al escritorio cuando salgo de Big Picture (tecla Windows, Alt+Tab, minimizar), no solo al cerrarlo",
         SettingsTitle = "Ajustes de BigPictureTV",
         Welcome = "¡Bienvenido! Cuando se abre Steam Big Picture, BigPictureTV pasa todo a la TV, y al cerrarlo vuelve tu escritorio.",
         WelcomeDetected = "Creemos que tu TV es {0}. Revisalo abajo y tocá Probar para verlo en acción.",

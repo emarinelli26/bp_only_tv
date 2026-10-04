@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using System.Threading;
-using System.Windows;
+using System.Windows.Forms;
 using BigPictureTV.Core;
 
 namespace BigPictureTV.App;
@@ -20,12 +20,12 @@ public static class Program
         if (!mutex.WaitOne(0))
         {
             MessageBox.Show(Strings.Current.AlreadyRunning, "BigPictureTV",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
             return 1;
         }
 
-        System.Windows.Forms.Application.EnableVisualStyles();
-        var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        Application.EnableVisualStyles();
+        Application.SetCompatibleTextRenderingDefault(false);
         TrayApp? tray = null;
 
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
@@ -33,17 +33,16 @@ public static class Program
             log.Write($"Unexpected error: {e.ExceptionObject}");
             tray?.Dispose(); // never leave the user stuck on the TV
         };
-        app.DispatcherUnhandledException += (_, e) =>
-        {
-            log.Write($"Unexpected error: {e.Exception}");
-            e.Handled = true;
-        };
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+        Application.ThreadException += (_, e) => log.Write($"Unexpected error: {e.Exception}");
 
         try
         {
+            // The tray runs on a plain WinForms message loop; WPF only loads
+            // when a window opens (see WpfDialogs).
             tray = new TrayApp(log);
-            app.SessionEnding += (_, _) => tray.Dispose();
-            app.Run();
+            Microsoft.Win32.SystemEvents.SessionEnding += (_, _) => tray.Dispose();
+            Application.Run();
         }
         finally
         {

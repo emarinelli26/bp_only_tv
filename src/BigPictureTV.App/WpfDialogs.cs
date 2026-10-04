@@ -1,0 +1,38 @@
+using System;
+using System.Collections.Generic;
+using BigPictureTV.Core;
+using BigPictureTV.Core.Display;
+
+namespace BigPictureTV.App;
+
+/// <summary>
+/// The only place the tray app touches WPF. WPF is large, so it loads the
+/// first time a window opens instead of at startup, which keeps the app's
+/// memory low while it just sits next to the clock.
+/// </summary>
+static class WpfDialogs
+{
+    static SettingsWindow? _settings;
+
+    public static bool SettingsOpen => _settings != null;
+
+    public static void ActivateSettings() => _settings?.Activate();
+
+    /// <summary>Shows the settings window and waits. Null if the user cancelled.</summary>
+    public static (AppSettings Settings, bool StartWithWindows)? ShowSettings(AppSettings settings,
+        IReadOnlyList<DisplayInfo> displays, bool firstRun, bool startWithWindows,
+        Func<AppSettings, bool> test, Func<bool> canTest)
+    {
+        _settings = new SettingsWindow(settings, displays, firstRun, startWithWindows, test, canTest);
+        try
+        {
+            return _settings.ShowDialog() == true ? (_settings.Result, _settings.StartWithWindows) : null;
+        }
+        finally
+        {
+            _settings = null;
+        }
+    }
+
+    public static void ShowTestCountdown() => new TestDialog().ShowDialog();
+}

@@ -34,6 +34,12 @@ public sealed class AppSettings
     /// <summary>Window titles that mean Big Picture is open.</summary>
     public List<string> BigPictureTitles { get; set; } = new() { "Steam Big Picture Mode", "Steam Big Picture" };
 
+    /// <summary>
+    /// Go back to the desktop as soon as Big Picture is minimized or hidden
+    /// (Windows key, Alt+Tab, a click elsewhere). Off: only when it closes.
+    /// </summary>
+    public bool DesktopWhenBigPictureHidden { get; set; }
+
     /// <summary>Process names (without .exe) that also keep the TV-only layout while they run.</summary>
     public List<string> ExtraProcesses { get; set; } = new();
 

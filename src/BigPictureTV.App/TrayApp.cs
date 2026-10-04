@@ -2,7 +2,6 @@ using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Windows.Forms;
-using System.Windows.Threading;
 using BigPictureTV.Core;
 using BigPictureTV.Core.Detection;
 using BigPictureTV.Core.Display;
@@ -23,9 +22,8 @@ public sealed class TrayApp : IDisposable
     readonly ModeController _controller;
     readonly LayoutStore _store = new(AppPaths.LayoutFile);
     BigPictureWatcher _probe;
-    SettingsWindow? _settingsWindow;
     readonly NotifyIcon _icon;
-    readonly DispatcherTimer _timer;
+    readonly Timer _timer;
     readonly string _exePath = Environment.ProcessPath ?? Application.ExecutablePath;
     bool _disposed;
 
@@ -36,7 +34,7 @@ public sealed class TrayApp : IDisposable
         var manager = new DisplayManager(_display, _store, ds => TvSelector.Select(ds, _settings), log,
             () => _settings.Layout);
         _controller = new ModeController(manager, log) { Grace = TimeSpan.FromSeconds(_settings.GraceSeconds) };
-        _probe = new BigPictureWatcher(_settings.BigPictureTitles, _settings.ExtraProcesses);
+        _probe = NewProbe();
 
         _icon = new NotifyIcon { ContextMenuStrip = new ContextMenuStrip(), Visible = true };
         _icon.ContextMenuStrip.Opening += (_, _) => { SyncWithDisplays(); BuildMenu(); };
@@ -51,31 +49,41 @@ public sealed class TrayApp : IDisposable
         _controller.Start(_probe.IsOpen());
         UpdateIcon();
 
-        _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(Math.Clamp(_settings.PollSeconds, 1, 60)) };
+        _timer = new Timer { Interval = Math.Clamp(_settings.PollSeconds, 1, 60) * 1000 };
         _timer.Tick += (_, _) => Check();
         _timer.Start();
 
         if (!_settings.FirstRunDone)
-            Dispatcher.CurrentDispatcher.BeginInvoke(() => OpenSettings(firstRun: true));
+        {
+            var once = new Timer { Interval = 500 };
+            once.Tick += (_, _) => { once.Dispose(); OpenSettings(firstRun: true); };
+            once.Start();
+        }
+        else
+        {
+            MemoryTrim.Soon();
+        }
     }
+
+    BigPictureWatcher NewProbe() => new(_settings.BigPictureTitles, _settings.ExtraProcesses,
+        _settings.DesktopWhenBigPictureHidden, _log);
 
     void OpenSettings(bool firstRun = false)
     {
-        if (_settingsWindow != null)
+        if (WpfDialogs.SettingsOpen)
         {
-            _settingsWindow.Activate();
+            WpfDialogs.ActivateSettings();
             return;
         }
         try
         {
-            _settingsWindow = new SettingsWindow(_settings, _display.ListDisplays(), firstRun,
+            var result = WpfDialogs.ShowSettings(_settings, _display.ListDisplays(), firstRun,
                 StartupRegistration.IsEnabled, TestSettings,
                 () => _controller.Mode == DisplayMode.Desktop && !_store.HasSaved);
-            bool saved = _settingsWindow.ShowDialog() == true;
-            if (saved)
+            if (result is { } saved)
             {
-                ApplySettings(_settingsWindow.Result);
-                StartupRegistration.Set(_settingsWindow.StartWithWindows, _exePath);
+                ApplySettings(saved.Settings);
+                StartupRegistration.Set(saved.StartWithWindows, _exePath);
             }
             else if (firstRun)
             {
@@ -89,7 +97,7 @@ public sealed class TrayApp : IDisposable
         }
         finally
         {
-            _settingsWindow = null;
+            MemoryTrim.Soon();
         }
     }
 
@@ -98,7 +106,7 @@ public sealed class TrayApp : IDisposable
         _settings = updated;
         _settings.Save(AppPaths.SettingsFile);
         _controller.Grace = TimeSpan.FromSeconds(_settings.GraceSeconds);
-        _probe = new BigPictureWatcher(_settings.BigPictureTitles, _settings.ExtraProcesses);
+        _probe = NewProbe();
         var (tv, reason) = TvSelector.Select(_display.ListDisplays(), _settings);
         _log.Write($"Settings saved (TV: {tv?.ToString() ?? "not found"}, {reason}; layout: {_settings.Layout}).");
     }
@@ -115,7 +123,7 @@ public sealed class TrayApp : IDisposable
                 if (_store.HasSaved) tester.RestoreDesktop();
                 return false;
             }
-            new TestDialog().ShowDialog();
+            WpfDialogs.ShowTestCountdown();
             tester.RestoreDesktop();
             return true;
         }
@@ -221,7 +229,7 @@ public sealed class TrayApp : IDisposable
 
         menu.Items.Add(new ToolStripSeparator());
         var exit = new ToolStripMenuItem(S.Exit);
-        exit.Click += (_, _) => System.Windows.Application.Current.Shutdown();
+        exit.Click += (_, _) => Application.Exit();
         menu.Items.Add(exit);
     }
 

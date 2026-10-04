@@ -27,7 +27,7 @@ public sealed class SettingsWindow : Window
     readonly List<(RadioButton Button, DisplayInfo Display)> _tvChoices = new();
     readonly RadioButton _tvOnly, _tvPrimary, _duplicate;
     readonly TextBox _grace, _extra;
-    readonly CheckBox _startup;
+    readonly CheckBox _startup, _desktopWhenHidden;
     readonly TextBlock _testMessage;
 
     public AppSettings Result => _draft;
@@ -97,6 +97,13 @@ public sealed class SettingsWindow : Window
         root.Children.Add(_tvOnly);
         root.Children.Add(_tvPrimary);
         root.Children.Add(_duplicate);
+        _desktopWhenHidden = new CheckBox
+        {
+            Content = new TextBlock { Text = S.DesktopWhenHidden, TextWrapping = TextWrapping.Wrap },
+            IsChecked = _draft.DesktopWhenBigPictureHidden,
+            Margin = new Thickness(0, 8, 0, 0),
+        };
+        root.Children.Add(_desktopWhenHidden);
 
         // The rest.
         root.Children.Add(Heading(""));
@@ -164,6 +171,7 @@ public sealed class SettingsWindow : Window
             return false;
         }
         _draft.GraceSeconds = grace;
+        _draft.DesktopWhenBigPictureHidden = _desktopWhenHidden.IsChecked == true;
         _draft.ExtraProcesses = BigPictureWatcher.NormalizeProcessNames(new[] { _extra.Text }).ToList();
         _draft.FirstRunDone = true;
         return true;
