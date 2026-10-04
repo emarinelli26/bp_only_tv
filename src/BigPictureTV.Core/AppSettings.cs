@@ -40,6 +40,12 @@ public sealed class AppSettings
     /// </summary>
     public bool DesktopWhenBigPictureHidden { get; set; }
 
+    /// <summary>
+    /// Key combination that switches between the TV and the desktop, like
+    /// "Ctrl+Alt+F12". Empty turns it off.
+    /// </summary>
+    public string Hotkey { get; set; } = Input.Hotkey.DefaultToggle.ToString();
+
     /// <summary>Process names (without .exe) that also keep the TV-only layout while they run.</summary>
     public List<string> ExtraProcesses { get; set; } = new();
 

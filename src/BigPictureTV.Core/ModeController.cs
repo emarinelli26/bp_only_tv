@@ -52,6 +52,9 @@ public sealed class ModeController
     /// <summary>Raised when something outside the app (Windows, Win+P, the TV) brought the other displays back.</summary>
     public event Action? LayoutChangedOutside;
 
+    /// <summary>Raised when Big Picture closed and the desktop comes back after the given wait, unless it reopens.</summary>
+    public event Action<TimeSpan>? LeavingTvSoon;
+
     /// <summary>How many checks in a row must disagree before we believe it (ignores a momentary glitch).</summary>
     public int MismatchesToConfirm { get; set; } = 2;
 
@@ -92,7 +95,11 @@ public sealed class ModeController
                 case DisplayMode.TvAuto:
                     if (LayoutLeftTv(bigPictureOpen, MismatchesToConfirm)) break;
                     if (bigPictureOpen) { _closedSince = null; break; }
-                    _closedSince ??= now;
+                    if (_closedSince == null)
+                    {
+                        _closedSince = now;
+                        if (Grace > TimeSpan.Zero) LeavingTvSoon?.Invoke(Grace);
+                    }
                     if (now - _closedSince.Value >= Grace)
                     {
                         _log.Write("Big Picture closed.");
@@ -141,12 +148,16 @@ public sealed class ModeController
         }
     }
 
-    /// <summary>Emergency restore: always goes back to the desktop, whatever the state.</summary>
+    /// <summary>
+    /// Emergency restore: always puts the desktop back, whatever the state,
+    /// even if nothing was saved (then Windows' last extended layout).
+    /// </summary>
     public void RestoreNow(bool bigPictureOpen)
     {
         lock (_gate)
         {
-            if (Mode != DisplayMode.Desktop || _switcher.HasSavedLayout) GoToDesktop();
+            _log.Write("Emergency restore requested.");
+            GoToDesktop();
             _suppressed = bigPictureOpen;
         }
     }
