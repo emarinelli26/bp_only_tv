@@ -61,9 +61,10 @@ and double-click it.
   included), to switch to the TV or back to the desktop. The shortcut can be
   changed or turned off in the settings.
 - `Ctrl+Alt+Shift+F12` always puts the desktop back, whatever state the app is in.
-- On an Xbox-style (XInput) controller, click both sticks (`LS+RS`) and hold them for 1.5 seconds
-  to do the same. The buttons can be changed or turned off in the settings,
-  where you can also make the controller buzz when it works. Avoid combos with
+- On an Xbox-style (XInput) controller, a button combo held for 1.5 seconds
+  can do the same. It is off by default: record one in the settings, for
+  example both sticks (`LS+RS`), and optionally make the controller buzz
+  when it works. Avoid combos with
   Back, Start or Home: many controllers use those for their own shortcuts (a
   GameSir Nova Lite changes mode with Back+Start+LB and drops off the PC).
 - The menu also has: settings, pause automatic switching, choose the TV (or

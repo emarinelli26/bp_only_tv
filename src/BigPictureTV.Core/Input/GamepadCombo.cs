@@ -26,9 +26,9 @@ public enum GamepadButtons : ushort
 /// <summary>Buttons held together on a controller, stored in the settings as text like "Back+Start+LB".</summary>
 public static class GamepadCombo
 {
-    // Clicking both sticks: controllers use Back/Start/Home combos for their
-    // own shortcuts (a GameSir Nova Lite switches modes with Back+Start+LB
-    // and drops off the PC), but leave the sticks alone.
+    // Suggested combo: clicking both sticks. Controllers use Back/Start/Home
+    // combos for their own shortcuts (a GameSir Nova Lite switches modes with
+    // Back+Start+LB and drops off the PC), but leave the sticks alone.
     public const GamepadButtons Default = GamepadButtons.LS | GamepadButtons.RS;
 
     /// <summary>How long the combo must be held, so a game using those buttons doesn't trigger it.</summary>

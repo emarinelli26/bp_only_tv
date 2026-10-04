@@ -11,7 +11,7 @@ public class GamepadComboTests
     public void DefaultReadsAsExpected()
     {
         Assert.Equal("LS+RS", GamepadCombo.Format(Combo));
-        Assert.Equal("LS+RS", new AppSettings().ControllerCombo);
+        Assert.Equal("", new AppSettings().ControllerCombo); // off until the user picks one
         Assert.False(new AppSettings().ControllerRumble);
     }
 

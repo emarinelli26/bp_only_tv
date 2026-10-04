@@ -48,9 +48,10 @@ public sealed class AppSettings
 
     /// <summary>
     /// Controller buttons that, held together, switch between the TV and the
-    /// desktop, like "LS+RS". Empty turns it off.
+    /// desktop, like "LS+RS". Empty (the default) turns it off: controllers
+    /// have their own button shortcuts, so the user picks one that is safe.
     /// </summary>
-    public string ControllerCombo { get; set; } = Input.GamepadCombo.Format(Input.GamepadCombo.Default);
+    public string ControllerCombo { get; set; } = "";
 
     /// <summary>
     /// Buzz the controller when the combo works. Off by default, as not
