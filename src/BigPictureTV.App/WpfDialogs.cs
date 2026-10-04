@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using BigPictureTV.Core;
+using BigPictureTV.Core.Audio;
 using BigPictureTV.Core.Display;
 using BigPictureTV.Core.Input;
 
@@ -23,10 +24,10 @@ static class WpfDialogs
     public static (AppSettings Settings, bool StartWithWindows)? ShowSettings(AppSettings settings,
         IReadOnlyList<DisplayInfo> displays, bool firstRun, bool startWithWindows,
         Func<AppSettings, bool> test, Func<bool> canTest, Func<Hotkey, bool> hotkeyAvailable,
-        Func<GamepadButtons?> controllerButtons)
+        Func<GamepadButtons?> controllerButtons, IReadOnlyList<AudioDevice> audioOutputs)
     {
         _settings = new SettingsWindow(settings, displays, firstRun, startWithWindows, test, canTest, hotkeyAvailable,
-            controllerButtons);
+            controllerButtons, audioOutputs);
         try
         {
             return _settings.ShowDialog() == true ? (_settings.Result, _settings.StartWithWindows) : null;

@@ -45,6 +45,46 @@ public class ModeControllerTests
     }
 
     [Fact]
+    public void OpenBigPictureWaitsForItToShowUp()
+    {
+        Assert.True(_c.OpenBigPicture(T0));
+        Assert.Equal(DisplayMode.TvAuto, _c.Mode);
+        _c.Tick(false, T0.AddSeconds(30)); // Steam still starting
+        Assert.Equal(DisplayMode.TvAuto, _c.Mode);
+        _c.Tick(true, T0.AddSeconds(35));
+        _c.Tick(false, T0.AddSeconds(40));
+        _c.Tick(false, T0.AddSeconds(46));
+        Assert.Equal(DisplayMode.Desktop, _c.Mode);
+        Assert.Equal(1, _sw.Switches);
+    }
+
+    [Fact]
+    public void OpenBigPictureGivesUpIfItNeverShowsUp()
+    {
+        _c.OpenBigPicture(T0);
+        _c.Tick(false, T0.AddSeconds(46));
+        _c.Tick(false, T0.AddSeconds(52));
+        Assert.Equal(DisplayMode.Desktop, _c.Mode);
+    }
+
+    [Fact]
+    public void OpenBigPictureKeepsManualMode()
+    {
+        _c.Toggle(bigPictureOpen: false);
+        Assert.True(_c.OpenBigPicture(T0));
+        Assert.Equal(DisplayMode.TvManual, _c.Mode);
+        Assert.Equal(1, _sw.Switches);
+    }
+
+    [Fact]
+    public void OpenBigPictureReportsAFailedSwitch()
+    {
+        _sw.SwitchSucceeds = false;
+        Assert.False(_c.OpenBigPicture(T0));
+        Assert.Equal(DisplayMode.Desktop, _c.Mode);
+    }
+
+    [Fact]
     public void ReopeningWithinTheGraceKeepsTheTv()
     {
         _c.Tick(true, T0);
