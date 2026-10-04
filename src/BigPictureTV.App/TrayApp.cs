@@ -18,10 +18,12 @@ public sealed class TrayApp : IDisposable
     static readonly Strings S = Strings.Current;
 
     readonly ILog _log;
-    readonly AppSettings _settings;
+    AppSettings _settings;
     readonly DisplayConfig _display = new();
     readonly ModeController _controller;
-    readonly BigPictureWatcher _probe;
+    readonly LayoutStore _store = new(AppPaths.LayoutFile);
+    BigPictureWatcher _probe;
+    SettingsWindow? _settingsWindow;
     readonly NotifyIcon _icon;
     readonly DispatcherTimer _timer;
     readonly string _exePath = Environment.ProcessPath ?? Application.ExecutablePath;
@@ -31,8 +33,8 @@ public sealed class TrayApp : IDisposable
     {
         _log = log;
         _settings = AppSettings.Load(AppPaths.SettingsFile, log);
-        var store = new LayoutStore(AppPaths.LayoutFile);
-        var manager = new DisplayManager(_display, store, ds => TvSelector.Select(ds, _settings), log);
+        var manager = new DisplayManager(_display, _store, ds => TvSelector.Select(ds, _settings), log,
+            () => _settings.Layout);
         _controller = new ModeController(manager, log) { Grace = TimeSpan.FromSeconds(_settings.GraceSeconds) };
         _probe = new BigPictureWatcher(_settings.BigPictureTitles, _settings.ExtraProcesses);
 
@@ -52,6 +54,75 @@ public sealed class TrayApp : IDisposable
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(Math.Clamp(_settings.PollSeconds, 1, 60)) };
         _timer.Tick += (_, _) => Check();
         _timer.Start();
+
+        if (!_settings.FirstRunDone)
+            Dispatcher.CurrentDispatcher.BeginInvoke(() => OpenSettings(firstRun: true));
+    }
+
+    void OpenSettings(bool firstRun = false)
+    {
+        if (_settingsWindow != null)
+        {
+            _settingsWindow.Activate();
+            return;
+        }
+        try
+        {
+            _settingsWindow = new SettingsWindow(_settings, _display.ListDisplays(), firstRun,
+                StartupRegistration.IsEnabled, TestSettings,
+                () => _controller.Mode == DisplayMode.Desktop && !_store.HasSaved);
+            bool saved = _settingsWindow.ShowDialog() == true;
+            if (saved)
+            {
+                ApplySettings(_settingsWindow.Result);
+                StartupRegistration.Set(_settingsWindow.StartWithWindows, _exePath);
+            }
+            else if (firstRun)
+            {
+                _settings.FirstRunDone = true; // don't greet again on every start
+                _settings.Save(AppPaths.SettingsFile);
+            }
+        }
+        catch (Exception e)
+        {
+            _log.Write($"Settings failed: {e}");
+        }
+        finally
+        {
+            _settingsWindow = null;
+        }
+    }
+
+    void ApplySettings(AppSettings updated)
+    {
+        _settings = updated;
+        _settings.Save(AppPaths.SettingsFile);
+        _controller.Grace = TimeSpan.FromSeconds(_settings.GraceSeconds);
+        _probe = new BigPictureWatcher(_settings.BigPictureTitles, _settings.ExtraProcesses);
+        var (tv, reason) = TvSelector.Select(_display.ListDisplays(), _settings);
+        _log.Write($"Settings saved (TV: {tv?.ToString() ?? "not found"}, {reason}; layout: {_settings.Layout}).");
+    }
+
+    /// <summary>Settings' Test button: switch with the draft settings, show the countdown on the TV, come back.</summary>
+    bool TestSettings(AppSettings draft)
+    {
+        _timer.Stop();
+        try
+        {
+            var tester = new DisplayManager(_display, _store, ds => TvSelector.Select(ds, draft), _log, () => draft.Layout);
+            if (!tester.SwitchToTv())
+            {
+                if (_store.HasSaved) tester.RestoreDesktop();
+                return false;
+            }
+            new TestDialog().ShowDialog();
+            tester.RestoreDesktop();
+            return true;
+        }
+        finally
+        {
+            _timer.Start();
+        }
     }
 
     void Check()
@@ -135,6 +206,9 @@ public sealed class TrayApp : IDisposable
         menu.Items.Add(pause);
 
         menu.Items.Add(new ToolStripSeparator());
+        var settings = new ToolStripMenuItem(S.Settings);
+        settings.Click += (_, _) => OpenSettings();
+        menu.Items.Add(settings);
         menu.Items.Add(BuildTvMenu());
 
         var startup = new ToolStripMenuItem(S.StartWithWindows) { Checked = StartupRegistration.IsEnabled };

@@ -76,29 +76,117 @@ public sealed class DisplayManagerTests : IDisposable
     }
 
     [Fact]
-    public void IsTvOnlyReadsTheRealDisplays()
+    public void IsOnTvReadsTheRealDisplays()
     {
         _manager.SwitchToTv();
         _display.Displays[0] = Displays.Monitor with { Active = false };
-        Assert.True(_manager.IsTvOnly());
+        Assert.True(_manager.IsOnTv());
 
         _display.Displays[0] = Displays.Monitor; // Windows turned the monitor back on
-        Assert.False(_manager.IsTvOnly());
+        Assert.False(_manager.IsOnTv());
 
         _display.Displays[0] = Displays.Monitor;
         _display.Displays[1] = Displays.LgTv with { Active = false }; // only the monitor
-        Assert.False(_manager.IsTvOnly());
+        Assert.False(_manager.IsOnTv());
     }
 
     [Fact]
-    public void IsTvOnlyFollowsTheDisplayWeSwitchedToEvenIfTheChoiceChanges()
+    public void IsOnTvFollowsTheDisplayWeSwitchedToEvenIfTheChoiceChanges()
     {
         var settings = new AppSettings();
         var manager = new DisplayManager(_display, _store, ds => TvSelector.Select(ds, settings), _log);
         manager.SwitchToTv();
         _display.Displays[0] = Displays.Monitor with { Active = false };
         settings.TvDevicePath = Displays.Monitor.DevicePath; // user picks another TV while on the TV
-        Assert.True(manager.IsTvOnly());
+        Assert.True(manager.IsOnTv());
+    }
+
+    DisplayManager ManagerWith(TvLayout layout) =>
+        new(_display, _store, ds => TvSelector.Select(ds, new AppSettings()), _log, () => layout);
+
+    [Fact]
+    public void TvPrimaryKeepsEveryDisplayAndMovesTheTvToTheOrigin()
+    {
+        var m = ManagerWith(TvLayout.TvPrimary);
+        Assert.True(m.SwitchToTv());
+        Assert.True(_store.HasSaved);
+        Assert.Equal(2, _display.Applied.Single().Layout.Paths.Length);
+        Assert.Equal(0, _display.Extends);
+    }
+
+    [Fact]
+    public void TvPrimaryTurnsAnInactiveTvOnFirst()
+    {
+        _display.Displays[1] = Displays.LgTv with { Active = false };
+        _display.OnExtend = () => _display.Displays[1] = Displays.LgTv;
+        var m = ManagerWith(TvLayout.TvPrimary);
+        Assert.True(m.SwitchToTv());
+        Assert.Equal(1, _display.Extends);
+        Assert.Single(_display.Applied);
+    }
+
+    [Fact]
+    public void TvPrimaryFailsIfTheTvNeverComesOn()
+    {
+        _display.Displays[1] = Displays.LgTv with { Active = false };
+        Assert.False(ManagerWith(TvLayout.TvPrimary).SwitchToTv());
+        Assert.Empty(_display.Applied);
+    }
+
+    [Fact]
+    public void DuplicateUsesTheCloneTopology()
+    {
+        var m = ManagerWith(TvLayout.Duplicate);
+        Assert.True(m.SwitchToTv());
+        Assert.Equal(1, _display.Clones);
+        Assert.True(_store.HasSaved);
+    }
+
+    [Fact]
+    public void SwitchingWhenAlreadyThereChangesNothing()
+    {
+        _display.Displays[0] = Displays.Monitor with { Primary = false };
+        _display.Displays[1] = Displays.LgTv with { Primary = true };
+        Assert.True(ManagerWith(TvLayout.TvPrimary).SwitchToTv());
+        Assert.Empty(_display.Applied);
+        Assert.False(_store.HasSaved);
+    }
+
+    [Fact]
+    public void RecognizesEachLayout()
+    {
+        string tv = Displays.LgTv.DevicePath;
+        var tvOnly = new[] { Displays.Monitor with { Active = false }, Displays.LgTv with { Primary = true } };
+        var extendedMonitorPrimary = new[] { Displays.Monitor, Displays.LgTv };
+        var extendedTvPrimary = new[] { Displays.Monitor with { Primary = false }, Displays.LgTv with { Primary = true } };
+        var cloned = new[] { Displays.Monitor, Displays.LgTv with { Primary = true } };
+
+        Assert.True(DisplayManager.IsIn(TvLayout.TvOnly, tvOnly, tv));
+        Assert.False(DisplayManager.IsIn(TvLayout.TvOnly, extendedTvPrimary, tv));
+
+        Assert.True(DisplayManager.IsIn(TvLayout.TvPrimary, extendedTvPrimary, tv));
+        Assert.False(DisplayManager.IsIn(TvLayout.TvPrimary, extendedMonitorPrimary, tv));
+
+        Assert.True(DisplayManager.IsIn(TvLayout.Duplicate, cloned, tv));
+        Assert.False(DisplayManager.IsIn(TvLayout.Duplicate, extendedTvPrimary, tv));
+
+        var tvOff = new[] { Displays.Monitor, Displays.LgTv with { Active = false } };
+        Assert.False(DisplayManager.IsIn(TvLayout.TvPrimary, tvOff, tv));
+    }
+
+    [Fact]
+    public void SettingsKeepTheLayoutAsText()
+    {
+        string file = Path.Combine(_dir, "settings.json");
+        new AppSettings { Layout = TvLayout.Duplicate, FirstRunDone = true }.Save(file);
+        Assert.Contains("\"Duplicate\"", File.ReadAllText(file));
+        var loaded = AppSettings.Load(file);
+        Assert.Equal(TvLayout.Duplicate, loaded.Layout);
+        Assert.True(loaded.FirstRunDone);
+
+        var copy = loaded.Clone();
+        copy.ExtraProcesses.Add("retroarch");
+        Assert.Empty(loaded.ExtraProcesses);
     }
 
     [Fact]

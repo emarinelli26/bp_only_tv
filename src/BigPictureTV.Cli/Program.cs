@@ -58,7 +58,7 @@ catch (ArgumentException e)
 }
 options.TryGetValue("tv", out string? tvOverride);
 
-var manager = new DisplayManager(display, store, ds => TvSelector.Select(ds, settings, tvOverride), log);
+var manager = new DisplayManager(display, store, ds => TvSelector.Select(ds, settings, tvOverride), log, () => settings.Layout);
 
 switch (command)
 {

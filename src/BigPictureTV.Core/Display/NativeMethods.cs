@@ -92,6 +92,17 @@ public struct TARGET_DEVICE_NAME
     public string monitorDevicePath;
 }
 
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+public struct SOURCE_DEVICE_NAME
+{
+    public uint type;
+    public uint size;
+    public LUID adapterId;
+    public uint id;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+    public string viewGdiDeviceName;
+}
+
 public sealed class Layout
 {
     public PATH_INFO[] Paths = Array.Empty<PATH_INFO>();
@@ -102,6 +113,7 @@ internal static class NativeMethods
 {
     public const uint QDC_ALL_PATHS = 0x1;
     public const uint QDC_ONLY_ACTIVE_PATHS = 0x2;
+    public const uint SDC_TOPOLOGY_CLONE = 0x2;
     public const uint SDC_TOPOLOGY_EXTEND = 0x4;
     public const uint SDC_USE_SUPPLIED_DISPLAY_CONFIG = 0x20;
     public const uint SDC_APPLY = 0x80;
@@ -109,7 +121,9 @@ internal static class NativeMethods
     public const uint SDC_ALLOW_CHANGES = 0x400;
     public const uint PATH_ACTIVE = 0x1;
     public const uint INVALID_IDX = 0xFFFFFFFF;
+    public const uint GET_SOURCE_NAME = 1;
     public const uint GET_TARGET_NAME = 2;
+    public const uint MODE_TYPE_SOURCE = 1;
 
     public const uint ApplyFlags = SDC_APPLY | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_ALLOW_CHANGES;
 
@@ -126,6 +140,9 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern int DisplayConfigGetDeviceInfo(ref TARGET_DEVICE_NAME request);
+
+    [DllImport("user32.dll")]
+    public static extern int DisplayConfigGetDeviceInfo(ref SOURCE_DEVICE_NAME request);
 
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 

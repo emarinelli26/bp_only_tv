@@ -27,6 +27,30 @@ public sealed class Strings
     public string NowOnDesktop { get; init; } = "";
     public string SwitchFailed { get; init; } = "";
     public string ChangedOutside { get; init; } = "";
+    public string Settings { get; init; } = "";
+    public string SettingsTitle { get; init; } = "";
+    public string Welcome { get; init; } = "";
+    public string WelcomeDetected { get; init; } = "";
+    public string WelcomeNotDetected { get; init; } = "";
+    public string TvGroup { get; init; } = "";
+    public string DetectAutomaticallyWith { get; init; } = "";
+    public string Identify { get; init; } = "";
+    public string InactiveInWindows { get; init; } = "";
+    public string LayoutGroup { get; init; } = "";
+    public string LayoutTvOnly { get; init; } = "";
+    public string LayoutTvPrimary { get; init; } = "";
+    public string LayoutDuplicate { get; init; } = "";
+    public string GraceLabel { get; init; } = "";
+    public string ExtraLabel { get; init; } = "";
+    public string ExtraHint { get; init; } = "";
+    public string Test { get; init; } = "";
+    public string TestBusy { get; init; } = "";
+    public string Save { get; init; } = "";
+    public string Cancel { get; init; } = "";
+    public string TestDialog { get; init; } = "";
+    public string TestBack { get; init; } = "";
+    public string TestSeconds { get; init; } = "";
+    public string TestFailed { get; init; } = "";
 
     static Strings English() => new()
     {
@@ -49,6 +73,30 @@ public sealed class Strings
         NowOnDesktop = "Desktop restored.",
         SwitchFailed = "Couldn't switch to the TV. Check that it's on, or pick it under TV.",
         ChangedOutside = "Windows turned the other displays back on. Big Picture will switch to the TV again next time it opens.",
+        Settings = "Settings…",
+        SettingsTitle = "BigPictureTV settings",
+        Welcome = "Welcome! When Steam Big Picture opens, BigPictureTV moves everything to the TV, and puts your desktop back when it closes.",
+        WelcomeDetected = "We think your TV is {0}. Check it below and press Test to see it in action.",
+        WelcomeNotDetected = "We couldn't tell which display is the TV. Pick it below; turn the TV on first if it isn't listed.",
+        TvGroup = "Which display is the TV?",
+        DetectAutomaticallyWith = "Detect automatically ({0})",
+        Identify = "Identify displays",
+        InactiveInWindows = "off in Windows",
+        LayoutGroup = "When Big Picture opens",
+        LayoutTvOnly = "Use only the TV (recommended)",
+        LayoutTvPrimary = "Make the TV the main display, keep the others on",
+        LayoutDuplicate = "Show the same picture on every display",
+        GraceLabel = "Seconds to wait after Big Picture closes:",
+        ExtraLabel = "Also use the TV while these programs run (emulators, etc.):",
+        ExtraHint = "Process names separated by commas, e.g. retroarch, dolphin",
+        Test = "Test",
+        TestBusy = "Go back to the desktop first to test.",
+        Save = "Save",
+        Cancel = "Cancel",
+        TestDialog = "This is what happens when Big Picture opens.",
+        TestBack = "Back to the desktop",
+        TestSeconds = "Going back to the desktop in {0} s.",
+        TestFailed = "Couldn't switch to that display. Check that it's on and connected.",
     };
 
     static Strings Spanish() => new()
@@ -72,5 +120,29 @@ public sealed class Strings
         NowOnDesktop = "Escritorio restaurado.",
         SwitchFailed = "No se pudo pasar a la TV. Revisá que esté encendida o elegila en el menú TV.",
         ChangedOutside = "Windows volvió a encender las otras pantallas. La próxima vez que abras Big Picture pasa a la TV de nuevo.",
+        Settings = "Ajustes…",
+        SettingsTitle = "Ajustes de BigPictureTV",
+        Welcome = "¡Bienvenido! Cuando se abre Steam Big Picture, BigPictureTV pasa todo a la TV, y al cerrarlo vuelve tu escritorio.",
+        WelcomeDetected = "Creemos que tu TV es {0}. Revisalo abajo y tocá Probar para verlo en acción.",
+        WelcomeNotDetected = "No pudimos saber cuál pantalla es la TV. Elegila abajo; si no aparece, encendela primero.",
+        TvGroup = "¿Cuál pantalla es la TV?",
+        DetectAutomaticallyWith = "Detectar automáticamente ({0})",
+        Identify = "Identificar pantallas",
+        InactiveInWindows = "apagada en Windows",
+        LayoutGroup = "Al abrir Big Picture",
+        LayoutTvOnly = "Usar solo la TV (recomendado)",
+        LayoutTvPrimary = "Poner la TV como principal y dejar las demás encendidas",
+        LayoutDuplicate = "Mostrar lo mismo en todas las pantallas",
+        GraceLabel = "Segundos a esperar después de cerrar Big Picture:",
+        ExtraLabel = "Usar la TV también mientras corren estos programas (emuladores, etc.):",
+        ExtraHint = "Nombres de proceso separados por comas, por ejemplo retroarch, dolphin",
+        Test = "Probar",
+        TestBusy = "Para probar, primero volvé al escritorio.",
+        Save = "Guardar",
+        Cancel = "Cancelar",
+        TestDialog = "Así queda cuando se abre Big Picture.",
+        TestBack = "Volver al escritorio",
+        TestSeconds = "Volviendo al escritorio en {0} s.",
+        TestFailed = "No se pudo pasar a esa pantalla. Revisá que esté encendida y conectada.",
     };
 }

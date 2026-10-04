@@ -6,14 +6,14 @@ public interface IDisplaySwitcher
     /// <summary>True if a desktop layout is saved, i.e. we are (or were left) on the TV.</summary>
     bool HasSavedLayout { get; }
 
-    /// <summary>Saves the desktop layout and leaves only the TV on. False if it did not happen.</summary>
+    /// <summary>Saves the desktop layout and switches to the TV layout. False if it did not happen.</summary>
     bool SwitchToTv();
 
     /// <summary>Puts the saved desktop layout back, falling back to Extend.</summary>
     void RestoreDesktop();
 
-    /// <summary>True if, right now, the TV is the only active display.</summary>
-    bool IsTvOnly();
+    /// <summary>True if, right now, the displays show the TV layout we switched to.</summary>
+    bool IsOnTv();
 
     /// <summary>Drops the saved layout without applying it (the desktop is already back).</summary>
     void ForgetSavedLayout();
@@ -30,10 +30,14 @@ public sealed class DisplayManager : IDisplaySwitcher
     // Device path of the display we switched to, so changing the chosen TV
     // in the settings while on the TV doesn't look like the layout changed.
     string? _switchedTo;
+    TvLayout? _switchedLayout;
+    readonly Func<TvLayout> _layout;
 
     public DisplayManager(IDisplayConfig display, LayoutStore store,
-        Func<IReadOnlyList<DisplayInfo>, (DisplayInfo? Tv, string Reason)> selectTv, ILog log)
+        Func<IReadOnlyList<DisplayInfo>, (DisplayInfo? Tv, string Reason)> selectTv, ILog log,
+        Func<TvLayout>? layout = null)
     {
+        _layout = layout ?? (() => TvLayout.TvOnly);
         _display = display;
         _store = store;
         _selectTv = selectTv;
@@ -44,63 +48,108 @@ public sealed class DisplayManager : IDisplaySwitcher
 
     public bool SwitchToTv()
     {
-        var (tv, reason) = _selectTv(_display.ListDisplays());
+        var displays = _display.ListDisplays();
+        var (tv, reason) = _selectTv(displays);
         if (tv == null)
         {
             _log.Write($"Can't switch to the TV: {reason}.");
             return false;
         }
 
-        var layout = _display.BuildSingleDisplay(tv.DevicePath);
-        if (layout == null)
+        var layout = _layout();
+        if (IsIn(layout, displays, tv.DevicePath))
         {
-            _log.Write($"Can't switch to the TV: {tv} is not connected.");
-            return false;
-        }
-
-        var current = _display.QueryActive();
-        if (current.Paths.Length == 1 && layout.Modes.Length > 0 &&
-            current.Paths[0].targetInfo.id == layout.Paths[0].targetInfo.id &&
-            current.Paths[0].targetInfo.adapterId.LowPart == layout.Paths[0].targetInfo.adapterId.LowPart &&
-            current.Paths[0].targetInfo.adapterId.HighPart == layout.Paths[0].targetInfo.adapterId.HighPart)
-        {
-            _log.Write("The TV is already the only display.");
-            _switchedTo = tv.DevicePath;
+            _log.Write($"Already on the TV ({layout}).");
+            Remember(tv, layout);
             return true;
         }
 
+        Layout? target = null;
+        if (layout == TvLayout.TvOnly)
+        {
+            target = _display.BuildSingleDisplay(tv.DevicePath);
+            if (target == null)
+            {
+                _log.Write($"Can't switch to the TV: {tv} is not connected.");
+                return false;
+            }
+        }
+
         // Only save if nothing is saved yet, so a second switch never
-        // overwrites the real desktop layout with the TV-only one.
+        // overwrites the real desktop layout with a TV one.
         if (!_store.HasSaved)
         {
+            var current = _display.QueryActive();
             _store.Save(current);
             _log.Write($"Saved current layout ({current.Paths.Length} active display(s)).");
         }
 
-        int err = _display.Apply(layout, saveToDatabase: false);
+        int err = layout switch
+        {
+            TvLayout.TvPrimary => ApplyPrimary(tv),
+            TvLayout.Duplicate => _display.ApplyClone(),
+            _ => _display.Apply(target!, saveToDatabase: false),
+        };
         if (err != 0)
         {
             _log.Write($"Switching to the TV failed (error {err}).");
             return false;
         }
-        _log.Write($"Switched to TV only: {tv} ({reason}).");
-        _switchedTo = tv.DevicePath;
+        _log.Write($"Switched to the TV ({layout}): {tv} ({reason}).");
+        Remember(tv, layout);
         return true;
     }
 
-    public bool IsTvOnly()
+    int ApplyPrimary(DisplayInfo tv)
+    {
+        var target = _display.BuildPrimary(tv.DevicePath);
+        if (target == null)
+        {
+            // The TV is connected but switched off in Windows: extend first so it comes on.
+            int err = _display.ApplyExtend();
+            if (err != 0) return err;
+            target = _display.BuildPrimary(tv.DevicePath);
+            if (target == null)
+            {
+                _log.Write($"{tv} did not turn on after extending the desktop.");
+                return -1;
+            }
+        }
+        return _display.Apply(target, saveToDatabase: false);
+    }
+
+    void Remember(DisplayInfo tv, TvLayout layout)
+    {
+        _switchedTo = tv.DevicePath;
+        _switchedLayout = layout;
+    }
+
+    public bool IsOnTv()
     {
         var displays = _display.ListDisplays();
-        var active = displays.Where(d => d.Active).ToList();
-        if (active.Count != 1) return false;
         string? tvPath = _switchedTo ?? _selectTv(displays).Tv?.DevicePath;
-        return string.Equals(active[0].DevicePath, tvPath, StringComparison.OrdinalIgnoreCase);
+        return tvPath != null && IsIn(_switchedLayout ?? _layout(), displays, tvPath);
+    }
+
+    /// <summary>Whether the displays already show the given TV layout.</summary>
+    public static bool IsIn(TvLayout layout, IReadOnlyList<DisplayInfo> displays, string tvPath)
+    {
+        var active = displays.Where(d => d.Active).ToList();
+        var tv = active.FirstOrDefault(d => string.Equals(d.DevicePath, tvPath, StringComparison.OrdinalIgnoreCase));
+        if (tv == null) return false;
+        return layout switch
+        {
+            TvLayout.TvPrimary => tv.Primary,
+            TvLayout.Duplicate => active.All(d => d.Primary), // cloned displays share one source at (0,0)
+            _ => active.Count == 1,
+        };
     }
 
     public void ForgetSavedLayout()
     {
         _store.Delete();
         _switchedTo = null;
+        _switchedLayout = null;
     }
 
     public void RestoreDesktop()
@@ -112,8 +161,7 @@ public sealed class DisplayManager : IDisplaySwitcher
                 int err = _display.Apply(_store.Load(), saveToDatabase: true);
                 if (err == 0)
                 {
-                    _store.Delete();
-                    _switchedTo = null;
+                    ForgetSavedLayout();
                     _log.Write("Restored saved layout.");
                     return;
                 }
@@ -130,8 +178,7 @@ public sealed class DisplayManager : IDisplaySwitcher
         int extendErr = _display.ApplyExtend();
         if (extendErr == 0)
         {
-            _store.Delete();
-            _switchedTo = null;
+            ForgetSavedLayout();
             _log.Write("Restored the last extended layout.");
         }
         else
