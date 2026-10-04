@@ -141,12 +141,16 @@ public sealed class ModeController
         }
     }
 
-    /// <summary>Emergency restore: always goes back to the desktop, whatever the state.</summary>
+    /// <summary>
+    /// Emergency restore: always puts the desktop back, whatever the state,
+    /// even if nothing was saved (then Windows' last extended layout).
+    /// </summary>
     public void RestoreNow(bool bigPictureOpen)
     {
         lock (_gate)
         {
-            if (Mode != DisplayMode.Desktop || _switcher.HasSavedLayout) GoToDesktop();
+            _log.Write("Emergency restore requested.");
+            GoToDesktop();
             _suppressed = bigPictureOpen;
         }
     }

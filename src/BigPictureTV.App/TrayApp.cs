@@ -5,6 +5,7 @@ using System.Windows.Forms;
 using BigPictureTV.Core;
 using BigPictureTV.Core.Detection;
 using BigPictureTV.Core.Display;
+using BigPictureTV.Core.Input;
 
 namespace BigPictureTV.App;
 
@@ -24,6 +25,8 @@ public sealed class TrayApp : IDisposable
     BigPictureWatcher _probe;
     readonly NotifyIcon _icon;
     readonly Timer _timer;
+    readonly HotkeyService _hotkeys = new();
+    bool _testing;
     readonly string _exePath = Environment.ProcessPath ?? Application.ExecutablePath;
     bool _disposed;
 
@@ -53,6 +56,12 @@ public sealed class TrayApp : IDisposable
         _timer.Tick += (_, _) => Check();
         _timer.Start();
 
+        _hotkeys.TogglePressed += () => { if (!_testing) Toggle(); };
+        _hotkeys.EmergencyPressed += Emergency;
+        if (!_hotkeys.RegisterEmergency())
+            _log.Write($"Emergency shortcut {Hotkey.Emergency} is taken by another program.");
+        ApplyHotkey();
+
         if (!_settings.FirstRunDone)
         {
             var once = new Timer { Interval = 500 };
@@ -75,11 +84,15 @@ public sealed class TrayApp : IDisposable
             WpfDialogs.ActivateSettings();
             return;
         }
+        // Off while the window is open, so pressing it in the shortcut box
+        // records it instead of switching displays.
+        _hotkeys.SetToggle(null);
         try
         {
             var result = WpfDialogs.ShowSettings(_settings, _display.ListDisplays(), firstRun,
                 StartupRegistration.IsEnabled, TestSettings,
-                () => _controller.Mode == DisplayMode.Desktop && !_store.HasSaved);
+                () => _controller.Mode == DisplayMode.Desktop && !_store.HasSaved,
+                _hotkeys.IsAvailable);
             if (result is { } saved)
             {
                 ApplySettings(saved.Settings);
@@ -97,6 +110,7 @@ public sealed class TrayApp : IDisposable
         }
         finally
         {
+            ApplyHotkey();
             MemoryTrim.Soon();
         }
     }
@@ -106,15 +120,46 @@ public sealed class TrayApp : IDisposable
         _settings = updated;
         _settings.Save(AppPaths.SettingsFile);
         _controller.Grace = TimeSpan.FromSeconds(_settings.GraceSeconds);
-        _probe = NewProbe();
+        _probe = NewProbe(); // the shortcut is applied when the settings window closes
         var (tv, reason) = TvSelector.Select(_display.ListDisplays(), _settings);
         _log.Write($"Settings saved (TV: {tv?.ToString() ?? "not found"}, {reason}; layout: {_settings.Layout}).");
+    }
+
+    void ApplyHotkey()
+    {
+        var hotkey = Hotkey.Parse(_settings.Hotkey);
+        if (hotkey == null && _settings.Hotkey.Trim().Length > 0)
+            _log.Write($"Shortcut \"{_settings.Hotkey}\" in the settings isn't valid; no shortcut.");
+        if (hotkey == _hotkeys.Toggle) return;
+        if (_hotkeys.SetToggle(hotkey))
+        {
+            _log.Write(hotkey == null ? "Keyboard shortcut off." : $"Keyboard shortcut: {hotkey}.");
+            return;
+        }
+        _log.Write($"Keyboard shortcut {hotkey} is taken by another program.");
+        Notify(string.Format(S.HotkeyTakenNotify, hotkey), ToolTipIcon.Warning);
+    }
+
+    void Emergency()
+    {
+        _log.Write($"{Hotkey.Emergency} pressed.");
+        try
+        {
+            bool wasDesktop = _controller.Mode == DisplayMode.Desktop;
+            _controller.RestoreNow(_probe.IsOpen());
+            if (wasDesktop) Notify(S.NowOnDesktop, ToolTipIcon.None);
+        }
+        catch (Exception e)
+        {
+            _log.Write($"Emergency restore failed: {e.Message}");
+        }
     }
 
     /// <summary>Settings' Test button: switch with the draft settings, show the countdown on the TV, come back.</summary>
     bool TestSettings(AppSettings draft)
     {
         _timer.Stop();
+        _testing = true;
         try
         {
             var tester = new DisplayManager(_display, _store, ds => TvSelector.Select(ds, draft), _log, () => draft.Layout);
@@ -129,6 +174,7 @@ public sealed class TrayApp : IDisposable
         }
         finally
         {
+            _testing = false;
             _timer.Start();
         }
     }
@@ -205,7 +251,11 @@ public sealed class TrayApp : IDisposable
         menu.Items.Add(new ToolStripSeparator());
 
         bool onTv = _controller.Mode != DisplayMode.Desktop;
-        var toggle = new ToolStripMenuItem(onTv ? S.BackToDesktop : S.SwitchToTv) { Font = BoldMenuFont(menu) };
+        var toggle = new ToolStripMenuItem(onTv ? S.BackToDesktop : S.SwitchToTv)
+        {
+            Font = BoldMenuFont(menu),
+            ShortcutKeyDisplayString = _hotkeys.Toggle?.ToString(),
+        };
         toggle.Click += (_, _) => Toggle();
         menu.Items.Add(toggle);
 
@@ -281,6 +331,7 @@ public sealed class TrayApp : IDisposable
         if (_disposed) return;
         _disposed = true;
         _timer.Stop();
+        _hotkeys.Dispose();
         try { _controller.Shutdown(); }
         catch (Exception e) { _log.Write($"Restoring the desktop on exit failed: {e.Message}"); }
         _icon.Visible = false;

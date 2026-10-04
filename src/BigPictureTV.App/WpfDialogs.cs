@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using BigPictureTV.Core;
 using BigPictureTV.Core.Display;
+using BigPictureTV.Core.Input;
 
 namespace BigPictureTV.App;
 
@@ -21,9 +22,9 @@ static class WpfDialogs
     /// <summary>Shows the settings window and waits. Null if the user cancelled.</summary>
     public static (AppSettings Settings, bool StartWithWindows)? ShowSettings(AppSettings settings,
         IReadOnlyList<DisplayInfo> displays, bool firstRun, bool startWithWindows,
-        Func<AppSettings, bool> test, Func<bool> canTest)
+        Func<AppSettings, bool> test, Func<bool> canTest, Func<Hotkey, bool> hotkeyAvailable)
     {
-        _settings = new SettingsWindow(settings, displays, firstRun, startWithWindows, test, canTest);
+        _settings = new SettingsWindow(settings, displays, firstRun, startWithWindows, test, canTest, hotkeyAvailable);
         try
         {
             return _settings.ShowDialog() == true ? (_settings.Result, _settings.StartWithWindows) : null;

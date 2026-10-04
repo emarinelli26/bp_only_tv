@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using BigPictureTV.Core;
 using BigPictureTV.Core.Detection;
 using BigPictureTV.Core.Display;
+using BigPictureTV.Core.Input;
 
 namespace BigPictureTV.App;
 
@@ -22,6 +24,7 @@ public sealed class SettingsWindow : Window
     readonly IReadOnlyList<DisplayInfo> _displays;
     readonly Func<AppSettings, bool> _test;
     readonly Func<bool> _canTest;
+    readonly Func<Hotkey, bool> _hotkeyAvailable;
 
     readonly RadioButton _auto;
     readonly List<(RadioButton Button, DisplayInfo Display)> _tvChoices = new();
@@ -29,15 +32,20 @@ public sealed class SettingsWindow : Window
     readonly TextBox _grace, _extra;
     readonly CheckBox _startup, _desktopWhenHidden;
     readonly TextBlock _testMessage;
+    readonly TextBox _hotkeyBox;
+    readonly TextBlock _hotkeyMessage;
+    Hotkey? _hotkey;
 
     public AppSettings Result => _draft;
     public bool StartWithWindows => _startup.IsChecked == true;
 
     /// <param name="test">Applies the given settings on the TV, waits for the user, and goes back. False if it couldn't switch.</param>
     /// <param name="canTest">False while the app itself is on the TV.</param>
+    /// <param name="hotkeyAvailable">False if another program already uses that combination.</param>
     public SettingsWindow(AppSettings settings, IReadOnlyList<DisplayInfo> displays, bool firstRun,
-        bool startWithWindows, Func<AppSettings, bool> test, Func<bool> canTest)
+        bool startWithWindows, Func<AppSettings, bool> test, Func<bool> canTest, Func<Hotkey, bool> hotkeyAvailable)
     {
+        _hotkeyAvailable = hotkeyAvailable;
         _draft = settings.Clone();
         _displays = displays;
         _test = test;
@@ -105,6 +113,28 @@ public sealed class SettingsWindow : Window
         };
         root.Children.Add(_desktopWhenHidden);
 
+        // Keyboard shortcut.
+        root.Children.Add(Heading(S.HotkeyGroup));
+        _hotkey = Hotkey.Parse(_draft.Hotkey);
+        var hotkeyRow = new StackPanel { Orientation = Orientation.Horizontal };
+        _hotkeyBox = new TextBox { IsReadOnly = true, Width = 220, ToolTip = string.Format(S.HotkeyHint, Hotkey.Emergency) };
+        _hotkeyBox.PreviewKeyDown += OnHotkeyKeyDown;
+        hotkeyRow.Children.Add(_hotkeyBox);
+        var noHotkey = Button(S.HotkeyNone);
+        noHotkey.Click += (_, _) => { _hotkey = null; _hotkeyMessage!.Text = ""; ShowHotkey(); };
+        hotkeyRow.Children.Add(noHotkey);
+        root.Children.Add(hotkeyRow);
+        _hotkeyMessage = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = System.Windows.Media.Brushes.Firebrick };
+        root.Children.Add(_hotkeyMessage);
+        root.Children.Add(new TextBlock
+        {
+            Text = string.Format(S.HotkeyHint, Hotkey.Emergency),
+            FontSize = 12,
+            Opacity = 0.7,
+            TextWrapping = TextWrapping.Wrap,
+        });
+        ShowHotkey();
+
         // The rest.
         root.Children.Add(Heading(""));
         var graceRow = new StackPanel { Orientation = Orientation.Horizontal };
@@ -141,6 +171,34 @@ public sealed class SettingsWindow : Window
         Content = new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = 800 };
     }
 
+    void ShowHotkey() => _hotkeyBox.Text = _hotkey?.ToString() ?? S.HotkeyOff;
+
+    // The box records whatever combination is pressed while it has focus.
+    void OnHotkeyKeyDown(object sender, KeyEventArgs e)
+    {
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        var mods = (KeyModifiers)(uint)Keyboard.Modifiers; // same bit values as RegisterHotKey
+        if (key == Key.Tab && mods == KeyModifiers.None) return; // keep Tab for moving around the window
+        e.Handled = true;
+        if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt or Key.LeftShift
+            or Key.RightShift or Key.LWin or Key.RWin or Key.None)
+            return; // wait for the actual key
+
+        var pressed = new Hotkey(mods, (uint)KeyInterop.VirtualKeyFromKey(key));
+        if (!pressed.IsValid)
+            _hotkeyMessage.Text = S.HotkeyNeedsModifier;
+        else if (pressed == Hotkey.Emergency)
+            _hotkeyMessage.Text = string.Format(S.HotkeyIsEmergency, Hotkey.Emergency);
+        else if (!_hotkeyAvailable(pressed))
+            _hotkeyMessage.Text = string.Format(S.HotkeyTaken, pressed);
+        else
+        {
+            _hotkeyMessage.Text = "";
+            _hotkey = pressed;
+            ShowHotkey();
+        }
+    }
+
     void RunTest()
     {
         _testMessage.Text = "";
@@ -171,6 +229,7 @@ public sealed class SettingsWindow : Window
             return false;
         }
         _draft.GraceSeconds = grace;
+        _draft.Hotkey = _hotkey?.ToString() ?? "";
         _draft.DesktopWhenBigPictureHidden = _desktopWhenHidden.IsChecked == true;
         _draft.ExtraProcesses = BigPictureWatcher.NormalizeProcessNames(new[] { _extra.Text }).ToList();
         _draft.FirstRunDone = true;

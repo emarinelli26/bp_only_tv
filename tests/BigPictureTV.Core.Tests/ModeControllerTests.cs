@@ -110,6 +110,24 @@ public class ModeControllerTests
     }
 
     [Fact]
+    public void RestoreNowRestoresEvenWhenNothingWasSaved()
+    {
+        _c.RestoreNow(bigPictureOpen: false);
+        Assert.Equal(1, _sw.Restores);
+        Assert.Equal(DisplayMode.Desktop, _c.Mode);
+    }
+
+    [Fact]
+    public void RestoreNowKeepsBigPictureFromSwitchingBackRightAway()
+    {
+        _c.Tick(true, T0);
+        _c.RestoreNow(bigPictureOpen: true);
+        _c.Tick(true, T0.AddSeconds(2));
+        Assert.Equal(DisplayMode.Desktop, _c.Mode);
+        Assert.Equal(1, _sw.Switches);
+    }
+
+    [Fact]
     public void StartRestoresALeftoverLayout()
     {
         _sw.HasSavedLayout = true;

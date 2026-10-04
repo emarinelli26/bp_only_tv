@@ -46,7 +46,8 @@ powershell -ExecutionPolicy Bypass -File .\Install.ps1 -Uninstall
 
 ## If you get stuck on the TV
 
-Press `Win+P` and choose **Extend**, or run `.\BigPictureTV.ps1 -Restore`.
+With the tray app running, press `Ctrl+Alt+Shift+F12`. Otherwise press
+`Win+P` and choose **Extend**, or run `.\BigPictureTV.ps1 -Restore`.
 The watcher also restores a leftover layout the next time it starts.
 
 ## BigPictureTV.exe (preview tray app)
@@ -56,7 +57,10 @@ It finds the TV on its own. No install and no admin rights needed: download it
 and double-click it.
 
 - The icon is grey on the desktop and blue while only the TV is on.
-- Double-click the icon to switch to the TV, or back to the desktop.
+- Double-click the icon, or press `Ctrl+Alt+F12` anywhere (Big Picture
+  included), to switch to the TV or back to the desktop. The shortcut can be
+  changed or turned off in the settings.
+- `Ctrl+Alt+Shift+F12` always puts the desktop back, whatever state the app is in.
 - The menu also has: settings, pause automatic switching, choose the TV (or
   leave it on automatic detection), start with Windows, and open the log folder.
 - Exiting always puts the desktop back.
@@ -71,6 +75,10 @@ is the TV. There you can:
 - Choose what happens when Big Picture opens: only the TV (default), the TV as
   the main display with the others still on, or the same picture on every
   display.
+- Choose whether stepping away from Big Picture without closing it (Windows
+  key, Alt+Tab) goes back to the desktop. Off by default.
+- Pick the keyboard shortcut: click the box and press the combination. If
+  another program already uses it, the window says so.
 - Set how long to wait after Big Picture closes, and list programs, such as
   emulators, that should also use the TV.
 - Press **Test** to see it right away. It goes back to the desktop by itself
