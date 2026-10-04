@@ -10,8 +10,8 @@ public class GamepadComboTests
     [Fact]
     public void DefaultReadsAsExpected()
     {
-        Assert.Equal("Back+Start+LB", GamepadCombo.Format(Combo));
-        Assert.Equal("Back+Start+LB", new AppSettings().ControllerCombo);
+        Assert.Equal("LS+RS", GamepadCombo.Format(Combo));
+        Assert.Equal("LS+RS", new AppSettings().ControllerCombo);
         Assert.False(new AppSettings().ControllerRumble);
     }
 
@@ -44,7 +44,7 @@ public class GamepadComboTests
     {
         var d = new ComboDetector();
         d.Update(Combo, Combo, T0);
-        d.Update(Combo, GamepadButtons.Back | GamepadButtons.Start, T0.AddSeconds(1));
+        d.Update(Combo, GamepadButtons.LS, T0.AddSeconds(1));
         Assert.False(d.Update(Combo, Combo, T0.AddSeconds(2)));
         Assert.True(d.Update(Combo, Combo, T0.AddSeconds(3.5)));
     }

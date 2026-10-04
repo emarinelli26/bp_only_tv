@@ -48,13 +48,13 @@ public sealed class AppSettings
 
     /// <summary>
     /// Controller buttons that, held together, switch between the TV and the
-    /// desktop, like "Back+Start+LB". Empty turns it off.
+    /// desktop, like "LS+RS". Empty turns it off.
     /// </summary>
     public string ControllerCombo { get; set; } = Input.GamepadCombo.Format(Input.GamepadCombo.Default);
 
     /// <summary>
-    /// Buzz the controller when the combo works. Off by default: some
-    /// third-party controllers drop off the PC when asked to vibrate.
+    /// Buzz the controller when the combo works. Off by default, as not
+    /// every third-party controller handles vibration from outside a game.
     /// </summary>
     public bool ControllerRumble { get; set; }
 
