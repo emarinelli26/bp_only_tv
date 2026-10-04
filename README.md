@@ -49,6 +49,23 @@ powershell -ExecutionPolicy Bypass -File .\Install.ps1 -Uninstall
 Press `Win+P` and choose **Extend**, or run `.\BigPictureTV.ps1 -Restore`.
 The watcher also restores a leftover layout the next time it starts.
 
+## BigPictureTV.exe (preview tray app)
+
+`BigPictureTV.exe` does the same as the watcher, from an icon next to the clock.
+It finds the TV on its own. No install and no admin rights needed: download it
+and double-click it.
+
+- The icon is grey on the desktop and blue while only the TV is on.
+- Double-click the icon to switch to the TV, or back to the desktop.
+- The menu also has: pause automatic switching, choose the TV (or leave it on
+  automatic detection), start with Windows, and open the log folder.
+- Exiting always puts the desktop back.
+
+If you installed the PowerShell watcher with `Install.ps1`, uninstall it first
+(`Install.ps1 -Uninstall`). Only one of them can run at a time.
+
+The menu is in Spanish or English, following the Windows display language.
+
 ## bptv.exe (preview)
 
 A C# version of the same tool lives in `src/`. It is the core of an upcoming
@@ -67,7 +84,7 @@ shares its files with the PowerShell script, so either one can restore a layout
 the other saved. Don't run both at once; the second one exits.
 
 Build it with the .NET 8 SDK: `dotnet publish src/BigPictureTV.Cli -c Release -r win-x64 -o publish`.
-Every push also builds `bptv.exe` in GitHub Actions (artifact `bptv-win-x64`).
+Every push also builds both exes in GitHub Actions (artifacts `BigPictureTV-win-x64` and `bptv-win-x64`).
 
 ## How it works
 

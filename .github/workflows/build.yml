@@ -15,6 +15,11 @@ jobs:
           dotnet-version: 8.0.x
       - run: dotnet test -c Release
       - run: dotnet publish src/BigPictureTV.Cli -c Release -r win-x64 -o publish
+      - run: dotnet publish src/BigPictureTV.App -c Release -r win-x64 -o publish
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BigPictureTV-win-x64
+          path: publish/BigPictureTV.exe
       - uses: actions/upload-artifact@v4
         with:
           name: bptv-win-x64
