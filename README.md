@@ -49,6 +49,26 @@ powershell -ExecutionPolicy Bypass -File .\Install.ps1 -Uninstall
 Press `Win+P` and choose **Extend**, or run `.\BigPictureTV.ps1 -Restore`.
 The watcher also restores a leftover layout the next time it starts.
 
+## bptv.exe (preview)
+
+A C# version of the same tool lives in `src/`. It is the core of an upcoming
+tray app. It finds the TV on its own, so you don't have to type its name.
+
+```powershell
+bptv list              # displays, and which one it thinks is the TV
+bptv select 2          # optional: pick the TV yourself (number from the list)
+bptv tv-only           # switch to the TV now
+bptv restore           # put the desktop back
+bptv watch             # switch automatically while Big Picture is open (Ctrl+C to stop)
+```
+
+`watch` also accepts `--extra retroarch,dolphin`, `--grace 5` and `--poll 2`. It
+shares its files with the PowerShell script, so either one can restore a layout
+the other saved. Don't run both at once; the second one exits.
+
+Build it with the .NET 8 SDK: `dotnet publish src/BigPictureTV.Cli -c Release -r win-x64 -o publish`.
+Every push also builds `bptv.exe` in GitHub Actions (artifact `bptv-win-x64`).
+
 ## How it works
 
 - Every 2 seconds it looks for a visible window titled **Steam Big Picture Mode**.
