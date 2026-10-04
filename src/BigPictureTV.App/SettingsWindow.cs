@@ -1,0 +1,222 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Windows;
+using System.Windows.Controls;
+using BigPictureTV.Core;
+using BigPictureTV.Core.Detection;
+using BigPictureTV.Core.Display;
+
+namespace BigPictureTV.App;
+
+/// <summary>
+/// Settings, also shown on first run as a welcome screen: which display is
+/// the TV, what switching does, and a Test button to try it right away.
+/// Works on a copy of the settings; the caller saves <see cref="Result"/>.
+/// </summary>
+public sealed class SettingsWindow : Window
+{
+    static readonly Strings S = Strings.Current;
+
+    readonly AppSettings _draft;
+    readonly IReadOnlyList<DisplayInfo> _displays;
+    readonly Func<AppSettings, bool> _test;
+    readonly Func<bool> _canTest;
+
+    readonly RadioButton _auto;
+    readonly List<(RadioButton Button, DisplayInfo Display)> _tvChoices = new();
+    readonly RadioButton _tvOnly, _tvPrimary, _duplicate;
+    readonly TextBox _grace, _extra;
+    readonly CheckBox _startup, _desktopWhenHidden;
+    readonly TextBlock _testMessage;
+
+    public AppSettings Result => _draft;
+    public bool StartWithWindows => _startup.IsChecked == true;
+
+    /// <param name="test">Applies the given settings on the TV, waits for the user, and goes back. False if it couldn't switch.</param>
+    /// <param name="canTest">False while the app itself is on the TV.</param>
+    public SettingsWindow(AppSettings settings, IReadOnlyList<DisplayInfo> displays, bool firstRun,
+        bool startWithWindows, Func<AppSettings, bool> test, Func<bool> canTest)
+    {
+        _draft = settings.Clone();
+        _displays = displays;
+        _test = test;
+        _canTest = canTest;
+
+        Title = S.SettingsTitle;
+        Width = 560;
+        SizeToContent = SizeToContent.Height;
+        ResizeMode = ResizeMode.NoResize;
+        WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        FontSize = 14;
+
+        var root = new StackPanel { Margin = new Thickness(20) };
+        var guess = TvDetector.Guess(displays);
+
+        if (firstRun)
+        {
+            root.Children.Add(Paragraph(S.Welcome));
+            root.Children.Add(Paragraph(guess != null ? string.Format(S.WelcomeDetected, guess) : S.WelcomeNotDetected, bold: true));
+        }
+
+        // Which display is the TV.
+        root.Children.Add(Heading(S.TvGroup));
+        _auto = new RadioButton
+        {
+            Content = string.Format(S.DetectAutomaticallyWith, guess?.ToString() ?? S.DetectedNone),
+            GroupName = "tv",
+            Margin = new Thickness(0, 2, 0, 2),
+        };
+        root.Children.Add(_auto);
+
+        bool automatic = _draft.TvDevicePath.Length == 0 && _draft.TvName.Length == 0;
+        var chosen = automatic ? null : TvSelector.Select(displays, _draft).Tv;
+        _auto.IsChecked = automatic || chosen == null;
+        for (int i = 0; i < displays.Count; i++)
+        {
+            var d = displays[i];
+            var rb = new RadioButton
+            {
+                Content = DisplayLabel(i + 1, d),
+                GroupName = "tv",
+                IsChecked = ReferenceEquals(d, chosen),
+                Margin = new Thickness(0, 2, 0, 2),
+            };
+            _tvChoices.Add((rb, d));
+            root.Children.Add(rb);
+        }
+        var identify = new Button { Content = S.Identify, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 6, 0, 0), Padding = new Thickness(10, 3, 10, 3) };
+        identify.Click += (_, _) => IdentifyOverlay.Show(_displays);
+        root.Children.Add(identify);
+
+        // What switching does.
+        root.Children.Add(Heading(S.LayoutGroup));
+        _tvOnly = Choice(S.LayoutTvOnly, "layout", _draft.Layout == TvLayout.TvOnly);
+        _tvPrimary = Choice(S.LayoutTvPrimary, "layout", _draft.Layout == TvLayout.TvPrimary);
+        _duplicate = Choice(S.LayoutDuplicate, "layout", _draft.Layout == TvLayout.Duplicate);
+        root.Children.Add(_tvOnly);
+        root.Children.Add(_tvPrimary);
+        root.Children.Add(_duplicate);
+        _desktopWhenHidden = new CheckBox
+        {
+            Content = new TextBlock { Text = S.DesktopWhenHidden, TextWrapping = TextWrapping.Wrap },
+            IsChecked = _draft.DesktopWhenBigPictureHidden,
+            Margin = new Thickness(0, 8, 0, 0),
+        };
+        root.Children.Add(_desktopWhenHidden);
+
+        // The rest.
+        root.Children.Add(Heading(""));
+        var graceRow = new StackPanel { Orientation = Orientation.Horizontal };
+        graceRow.Children.Add(new TextBlock { Text = S.GraceLabel, VerticalAlignment = VerticalAlignment.Center });
+        _grace = new TextBox { Text = _draft.GraceSeconds.ToString(), Width = 50, Margin = new Thickness(8, 0, 0, 0) };
+        graceRow.Children.Add(_grace);
+        root.Children.Add(graceRow);
+
+        root.Children.Add(new TextBlock { Text = S.ExtraLabel, Margin = new Thickness(0, 10, 0, 2), TextWrapping = TextWrapping.Wrap });
+        _extra = new TextBox { Text = string.Join(", ", _draft.ExtraProcesses), ToolTip = S.ExtraHint };
+        root.Children.Add(_extra);
+        root.Children.Add(new TextBlock { Text = S.ExtraHint, FontSize = 12, Opacity = 0.7 });
+
+        _startup = new CheckBox { Content = S.StartWithWindows, IsChecked = startWithWindows, Margin = new Thickness(0, 12, 0, 0) };
+        root.Children.Add(_startup);
+
+        // Buttons.
+        _testMessage = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0), Foreground = System.Windows.Media.Brushes.Firebrick };
+        root.Children.Add(_testMessage);
+
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
+        var testButton = Button(S.Test);
+        testButton.Click += (_, _) => RunTest();
+        var save = Button(S.Save);
+        save.IsDefault = true;
+        save.Click += (_, _) => { if (Collect()) DialogResult = true; };
+        var cancel = Button(S.Cancel);
+        cancel.IsCancel = true;
+        buttons.Children.Add(testButton);
+        buttons.Children.Add(save);
+        buttons.Children.Add(cancel);
+        root.Children.Add(buttons);
+
+        Content = new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = 800 };
+    }
+
+    void RunTest()
+    {
+        _testMessage.Text = "";
+        if (!_canTest())
+        {
+            _testMessage.Text = S.TestBusy;
+            return;
+        }
+        if (!Collect()) return;
+        if (!_test(_draft)) _testMessage.Text = S.TestFailed;
+    }
+
+    /// <summary>Copies the form into the draft. False (and a message) if something is invalid.</summary>
+    bool Collect()
+    {
+        var picked = _tvChoices.FirstOrDefault(c => c.Button.IsChecked == true).Display;
+        _draft.TvDevicePath = picked?.DevicePath ?? "";
+        _draft.TvName = picked?.Name ?? "";
+
+        _draft.Layout = _tvPrimary.IsChecked == true ? TvLayout.TvPrimary
+            : _duplicate.IsChecked == true ? TvLayout.Duplicate
+            : TvLayout.TvOnly;
+
+        if (!int.TryParse(_grace.Text.Trim(), out int grace) || grace < 0 || grace > 600)
+        {
+            _grace.Focus();
+            _grace.SelectAll();
+            return false;
+        }
+        _draft.GraceSeconds = grace;
+        _draft.DesktopWhenBigPictureHidden = _desktopWhenHidden.IsChecked == true;
+        _draft.ExtraProcesses = BigPictureWatcher.NormalizeProcessNames(new[] { _extra.Text }).ToList();
+        _draft.FirstRunDone = true;
+        return true;
+    }
+
+    static string DisplayLabel(int number, DisplayInfo d)
+    {
+        var parts = new List<string>();
+        if (d.Width > 0) parts.Add($"{d.Width}x{d.Height}");
+        if (d.Connection == OutputTechnology.Hdmi) parts.Add("HDMI");
+        else if (d.Connection is OutputTechnology.DisplayPortExternal or OutputTechnology.DisplayPortUsbTunnel) parts.Add("DisplayPort");
+        if (!d.Active) parts.Add(S.InactiveInWindows);
+        string details = parts.Count > 0 ? $"  ({string.Join(", ", parts)})" : "";
+        return $"{number}. {d}{details}";
+    }
+
+    static TextBlock Heading(string text) => new()
+    {
+        Text = text,
+        FontWeight = FontWeights.SemiBold,
+        FontSize = 15,
+        Margin = new Thickness(0, 16, 0, 4),
+    };
+
+    static TextBlock Paragraph(string text, bool bold = false) => new()
+    {
+        Text = text,
+        TextWrapping = TextWrapping.Wrap,
+        FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal,
+        Margin = new Thickness(0, 0, 0, 8),
+    };
+
+    static RadioButton Choice(string text, string group, bool isChecked) => new()
+    {
+        Content = text,
+        GroupName = group,
+        IsChecked = isChecked,
+        Margin = new Thickness(0, 2, 0, 2),
+    };
+
+    static Button Button(string text) => new()
+    {
+        Content = text,
+        MinWidth = 90,
+        Padding = new Thickness(10, 4, 10, 4),
+        Margin = new Thickness(8, 0, 0, 0),
+    };
+}

@@ -176,7 +176,7 @@ public sealed class ModeController
     // it, and wait for Big Picture to reopen (or a toggle) to switch again.
     bool LayoutLeftTv(bool bigPictureOpen, int required)
     {
-        if (_switcher.IsTvOnly())
+        if (_switcher.IsOnTv())
         {
             _mismatches = 0;
             return false;

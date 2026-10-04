@@ -40,6 +40,13 @@ public sealed record DisplayInfo
     public uint Width { get; init; }
     public uint Height { get; init; }
 
+    /// <summary>Desktop position of an active display; the primary one is at (0,0).</summary>
+    public int X { get; init; }
+    public int Y { get; init; }
+
+    /// <summary>GDI name of an active display (\\.\DISPLAY1), to match it with a screen.</summary>
+    public string GdiName { get; init; } = "";
+
     /// <summary>Three-letter PnP manufacturer id taken from the device path (GSM = LG, SAM = Samsung...).</summary>
     public string Manufacturer => ManufacturerFromDevicePath(DevicePath);
 

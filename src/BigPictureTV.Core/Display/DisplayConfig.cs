@@ -18,11 +18,21 @@ public interface IDisplayConfig
     /// </summary>
     Layout? BuildSingleDisplay(string devicePath);
 
+    /// <summary>
+    /// The current layout with the given display moved to (0,0) so it becomes
+    /// primary; the others keep their place around it. Null if that display
+    /// is not active right now.
+    /// </summary>
+    Layout? BuildPrimary(string devicePath);
+
     /// <summary>Applies a layout. Returns the Win32 error code (0 = success).</summary>
     int Apply(Layout layout, bool saveToDatabase);
 
     /// <summary>Applies Windows' last remembered Extend arrangement.</summary>
     int ApplyExtend();
+
+    /// <summary>Applies Windows' Duplicate arrangement.</summary>
+    int ApplyClone();
 }
 
 /// <summary>The real implementation, on top of the CCD API. Windows only.</summary>
@@ -45,13 +55,18 @@ public sealed class DisplayConfig : IDisplayConfig
 
             var name = GetTargetName(t.adapterId, t.id);
             uint width = 0, height = 0;
+            int x = 0, y = 0;
             bool primary = false;
+            string gdiName = "";
             if (active && p.sourceInfo.modeInfoIdx != INVALID_IDX && p.sourceInfo.modeInfoIdx < all.Modes.Length)
             {
                 var src = all.Modes[p.sourceInfo.modeInfoIdx];
                 width = src.sourceWidth;
                 height = src.sourceHeight;
-                primary = src.sourcePositionX == 0 && src.sourcePositionY == 0;
+                x = src.sourcePositionX;
+                y = src.sourcePositionY;
+                primary = x == 0 && y == 0;
+                gdiName = GetSourceName(p.sourceInfo.adapterId, p.sourceInfo.id);
             }
             if (!byTarget.ContainsKey(key)) order.Add(key);
             byTarget[key] = new DisplayInfo
@@ -63,6 +78,9 @@ public sealed class DisplayConfig : IDisplayConfig
                 Connection = (OutputTechnology)t.outputTechnology,
                 Width = width,
                 Height = height,
+                X = x,
+                Y = y,
+                GdiName = gdiName,
             };
         }
         return order.Select(k => byTarget[k]).ToList();
@@ -110,6 +128,26 @@ public sealed class DisplayConfig : IDisplayConfig
         return null;
     }
 
+    public Layout? BuildPrimary(string devicePath)
+    {
+        var active = Query(QDC_ONLY_ACTIVE_PATHS);
+        foreach (var p in active.Paths)
+        {
+            if (!PathIs(p, devicePath) || p.sourceInfo.modeInfoIdx == INVALID_IDX) continue;
+            var tvSource = active.Modes[p.sourceInfo.modeInfoIdx];
+            int dx = tvSource.sourcePositionX, dy = tvSource.sourcePositionY;
+            var modes = (MODE_INFO[])active.Modes.Clone();
+            for (int i = 0; i < modes.Length; i++)
+            {
+                if (modes[i].infoType != MODE_TYPE_SOURCE) continue;
+                modes[i].sourcePositionX -= dx;
+                modes[i].sourcePositionY -= dy;
+            }
+            return new Layout { Paths = active.Paths, Modes = modes };
+        }
+        return null;
+    }
+
     public int Apply(Layout layout, bool saveToDatabase)
     {
         uint flags = ApplyFlags | (saveToDatabase ? SDC_SAVE_TO_DATABASE : 0);
@@ -118,6 +156,8 @@ public sealed class DisplayConfig : IDisplayConfig
     }
 
     public int ApplyExtend() => SetDisplayConfig(0, null, 0, null, SDC_APPLY | SDC_TOPOLOGY_EXTEND);
+
+    public int ApplyClone() => SetDisplayConfig(0, null, 0, null, SDC_APPLY | SDC_TOPOLOGY_CLONE);
 
     static bool PathIs(PATH_INFO p, string devicePath) =>
         string.Equals(GetTargetName(p.targetInfo.adapterId, p.targetInfo.id).monitorDevicePath,
@@ -140,6 +180,18 @@ public sealed class DisplayConfig : IDisplayConfig
             return new Layout { Paths = paths, Modes = modes };
         }
         throw new InvalidOperationException("QueryDisplayConfig kept changing size");
+    }
+
+    static string GetSourceName(LUID adapterId, uint sourceId)
+    {
+        var req = new SOURCE_DEVICE_NAME
+        {
+            type = GET_SOURCE_NAME,
+            size = (uint)Marshal.SizeOf<SOURCE_DEVICE_NAME>(),
+            adapterId = adapterId,
+            id = sourceId,
+        };
+        return DisplayConfigGetDeviceInfo(ref req) == 0 ? req.viewGdiDeviceName ?? "" : "";
     }
 
     static TARGET_DEVICE_NAME GetTargetName(LUID adapterId, uint targetId)

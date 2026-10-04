@@ -58,7 +58,7 @@ catch (ArgumentException e)
 }
 options.TryGetValue("tv", out string? tvOverride);
 
-var manager = new DisplayManager(display, store, ds => TvSelector.Select(ds, settings, tvOverride), log);
+var manager = new DisplayManager(display, store, ds => TvSelector.Select(ds, settings, tvOverride), log, () => settings.Layout);
 
 switch (command)
 {
@@ -137,7 +137,7 @@ int Watch()
         return 1;
     }
 
-    var probe = new BigPictureWatcher(settings.BigPictureTitles, extra);
+    var probe = new BigPictureWatcher(settings.BigPictureTitles, extra, settings.DesktopWhenBigPictureHidden, log);
     var controller = new ModeController(manager, log) { Grace = TimeSpan.FromSeconds(grace) };
 
     using var stop = new CancellationTokenSource();

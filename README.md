@@ -57,9 +57,24 @@ and double-click it.
 
 - The icon is grey on the desktop and blue while only the TV is on.
 - Double-click the icon to switch to the TV, or back to the desktop.
-- The menu also has: pause automatic switching, choose the TV (or leave it on
-  automatic detection), start with Windows, and open the log folder.
+- The menu also has: settings, pause automatic switching, choose the TV (or
+  leave it on automatic detection), start with Windows, and open the log folder.
 - Exiting always puts the desktop back.
+- If Windows turns the other displays back on by itself (the TV went to
+  standby, Win+P), the app notices and goes back to desktop mode. It switches
+  again the next time Big Picture opens.
+
+The first time it runs, the settings window opens with the display it thinks
+is the TV. There you can:
+
+- Pick the TV. **Identify displays** shows a big number on each screen.
+- Choose what happens when Big Picture opens: only the TV (default), the TV as
+  the main display with the others still on, or the same picture on every
+  display.
+- Set how long to wait after Big Picture closes, and list programs, such as
+  emulators, that should also use the TV.
+- Press **Test** to see it right away. It goes back to the desktop by itself
+  after 15 seconds.
 
 If you installed the PowerShell watcher with `Install.ps1`, uninstall it first
 (`Install.ps1 -Uninstall`). Only one of them can run at a time.

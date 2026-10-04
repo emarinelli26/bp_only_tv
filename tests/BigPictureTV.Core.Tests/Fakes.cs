@@ -33,7 +33,7 @@ sealed class FakeSwitcher : IDisplaySwitcher
         TvOnly = false;
     }
 
-    public bool IsTvOnly() => TvOnly;
+    public bool IsOnTv() => TvOnly;
 
     public void ForgetSavedLayout() => HasSavedLayout = false;
 }
@@ -64,10 +64,28 @@ sealed class FakeDisplayConfig : IDisplayConfig
         return ApplyResult;
     }
 
+    public Layout? BuildPrimary(string devicePath)
+    {
+        if (!Displays.Any(d => d.DevicePath == devicePath && d.Active)) return null;
+        return new Layout { Paths = new PATH_INFO[Displays.Count(d => d.Active)], Modes = new MODE_INFO[1] };
+    }
+
+    /// <summary>Runs when ApplyExtend succeeds, e.g. to turn an inactive TV on.</summary>
+    public Action? OnExtend { get; set; }
+
     public int ApplyExtend()
     {
         Extends++;
+        if (ExtendResult == 0) OnExtend?.Invoke();
         return ExtendResult;
+    }
+
+    public int Clones { get; private set; }
+
+    public int ApplyClone()
+    {
+        Clones++;
+        return 0;
     }
 }
 
