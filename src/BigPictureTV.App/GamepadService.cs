@@ -32,6 +32,9 @@ sealed class GamepadService : IDisposable
     /// <summary>The combo to look for; None turns it off. Safe to set from any thread.</summary>
     public GamepadButtons Combo { get; set; }
 
+    /// <summary>Buzz the controller when the combo fires. Safe to set from any thread.</summary>
+    public bool Rumble { get; set; }
+
     /// <summary>Buttons held right now across all controllers, or null if none is connected.</summary>
     public GamepadButtons? Pressed => _pressed < 0 ? null : (GamepadButtons)_pressed;
 
@@ -69,7 +72,7 @@ sealed class GamepadService : IDisposable
                 if (_detectors[i].Update(Combo, buttons.Value, now))
                 {
                     _log.Write($"Controller {i + 1}: {GamepadCombo.Format(Combo)} held.");
-                    Rumble(i);
+                    if (Rumble) Buzz(i);
                     _onCombo();
                 }
             }
@@ -98,7 +101,7 @@ sealed class GamepadService : IDisposable
     }
 
     // A short buzz so the player knows the combo worked, even with the TV still dark.
-    void Rumble(int index)
+    void Buzz(int index)
     {
         var on = new XINPUT_VIBRATION { wLeftMotorSpeed = 30000, wRightMotorSpeed = 30000 };
         var off = new XINPUT_VIBRATION();

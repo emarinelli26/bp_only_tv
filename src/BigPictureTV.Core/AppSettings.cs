@@ -52,6 +52,12 @@ public sealed class AppSettings
     /// </summary>
     public string ControllerCombo { get; set; } = Input.GamepadCombo.Format(Input.GamepadCombo.Default);
 
+    /// <summary>
+    /// Buzz the controller when the combo works. Off by default: some
+    /// third-party controllers drop off the PC when asked to vibrate.
+    /// </summary>
+    public bool ControllerRumble { get; set; }
+
     /// <summary>Process names (without .exe) that also keep the TV-only layout while they run.</summary>
     public List<string> ExtraProcesses { get; set; } = new();
 

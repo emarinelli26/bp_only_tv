@@ -12,6 +12,7 @@ public class GamepadComboTests
     {
         Assert.Equal("Back+Start+LB", GamepadCombo.Format(Combo));
         Assert.Equal("Back+Start+LB", new AppSettings().ControllerCombo);
+        Assert.False(new AppSettings().ControllerRumble);
     }
 
     [Theory]

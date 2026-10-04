@@ -56,6 +56,7 @@ public sealed class Strings
     public string ComboGroup { get; init; } = "";
     public string ComboHint { get; init; } = "";
     public string ComboRecord { get; init; } = "";
+    public string ComboRumble { get; init; } = "";
     public string ComboNone { get; init; } = "";
     public string ComboRecording { get; init; } = "";
     public string ComboNoController { get; init; } = "";
@@ -118,6 +119,7 @@ public sealed class Strings
         ComboGroup = "Controller buttons to switch between the TV and the desktop",
         ComboHint = "Press Record and hold two or more buttons together. To switch, hold them for {0} s. Works with Xbox-style (XInput) controllers.",
         ComboRecord = "Record",
+        ComboRumble = "Vibrate the controller when it switches (some controllers disconnect with this)",
         ComboNone = "No combo",
         ComboRecording = "Hold the buttons…",
         ComboNoController = "No controller found. Connect it and try again.",
@@ -182,6 +184,7 @@ public sealed class Strings
         ComboGroup = "Botones del mando para cambiar entre la TV y el escritorio",
         ComboHint = "Tocá Grabar y mantené dos o más botones juntos. Para cambiar, mantenelos {0} s. Funciona con mandos tipo Xbox (XInput).",
         ComboRecord = "Grabar",
+        ComboRumble = "Vibrar el mando al cambiar (algunos mandos se desconectan con esto)",
         ComboNone = "Sin combo",
         ComboRecording = "Mantené los botones…",
         ComboNoController = "No se encontró ningún mando. Conectalo y probá de nuevo.",

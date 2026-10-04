@@ -156,6 +156,7 @@ public sealed class TrayApp : IDisposable
 
     void ApplyCombo()
     {
+        _gamepad.Rumble = _settings.ControllerRumble;
         var combo = GamepadCombo.Parse(_settings.ControllerCombo) ?? GamepadButtons.None;
         if (combo == _gamepad.Combo) return;
         _gamepad.Combo = combo;

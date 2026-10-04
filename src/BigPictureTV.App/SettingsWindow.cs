@@ -31,7 +31,7 @@ public sealed class SettingsWindow : Window
     readonly List<(RadioButton Button, DisplayInfo Display)> _tvChoices = new();
     readonly RadioButton _tvOnly, _tvPrimary, _duplicate;
     readonly TextBox _grace, _extra;
-    readonly CheckBox _startup, _desktopWhenHidden;
+    readonly CheckBox _startup, _desktopWhenHidden, _rumble;
     readonly TextBlock _testMessage;
     readonly TextBox _hotkeyBox;
     readonly TextBlock _hotkeyMessage;
@@ -167,6 +167,8 @@ public sealed class SettingsWindow : Window
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,
         });
+        _rumble = new CheckBox { Content = S.ComboRumble, IsChecked = _draft.ControllerRumble, Margin = new Thickness(0, 6, 0, 0) };
+        root.Children.Add(_rumble);
         _comboTimer.Tick += (_, _) => ComboCaptureTick();
         Closed += (_, _) => _comboTimer.Stop();
         ShowCombo();
@@ -318,6 +320,7 @@ public sealed class SettingsWindow : Window
         }
         _draft.GraceSeconds = grace;
         _draft.Hotkey = _hotkey?.ToString() ?? "";
+        _draft.ControllerRumble = _rumble.IsChecked == true;
         _draft.ControllerCombo = _combo == GamepadButtons.None ? "" : GamepadCombo.Format(_combo);
         _draft.DesktopWhenBigPictureHidden = _desktopWhenHidden.IsChecked == true;
         _draft.ExtraProcesses = BigPictureWatcher.NormalizeProcessNames(new[] { _extra.Text }).ToList();
