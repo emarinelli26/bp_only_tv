@@ -1,0 +1,37 @@
+name: Something doesn't work / Algo no funciona
+description: The displays didn't switch, didn't come back, or the app misbehaved.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Spanish is fine too. / ¡Gracias por avisar! Podés escribir en español.
+
+        **Stuck on the TV?** Press `Ctrl+Alt+Shift+F12`, or `Win+P` and choose **Extend**.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened? / ¿Qué pasó?
+      description: What you did, what you expected, and what you saw instead.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostic info / Info de diagnóstico
+      description: |
+        Right-click the BigPictureTV icon next to the clock → **Copy diagnostic info**, then paste it here.
+        Clic derecho en el ícono junto al reloj → **Copiar info de diagnóstico**, y pegalo acá.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: gpu
+    attributes:
+      label: Graphics card / Placa de video
+      placeholder: e.g. NVIDIA RTX 3060, AMD RX 6600, Intel UHD 770
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else? / ¿Algo más?
+      description: Controller model, how the TV is connected (HDMI, receiver...), Steam language, screenshots.

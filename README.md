@@ -1,142 +1,135 @@
-# bp_only_tv
+# BigPictureTV
 
-Keep Steam Big Picture on the TV only.
+Keep Steam Big Picture on the TV, and only on the TV.
 
-When Big Picture opens, every display except the TV is switched off and the TV
-becomes the primary display, so Big Picture, the games and emulators you launch
-from it all land on the TV instead of the monitor or spanned across both. When
-Big Picture closes, your normal desktop layout comes back.
+*[Leer en español](README.es.md)*
 
-Windows 10 and 11, Windows PowerShell 5.1 (built in). No admin rights needed.
+When Big Picture opens, BigPictureTV switches your displays so Big Picture, and
+the games and emulators you launch from it, land on the TV instead of the
+monitor or spanned across both. When Big Picture closes, your normal desktop
+comes back.
 
-## Install
+It runs as a small icon next to the clock. Windows 10 and 11, any graphics card
+(NVIDIA, AMD, Intel). No install and no admin rights needed.
 
-1. Download or clone this repo.
-2. Turn the TV on so Windows can see it.
-3. Open PowerShell in the repo folder and run:
+## Download
 
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File .\Install.ps1
-   ```
+1. Get **BigPictureTV.exe** from the [latest release](https://github.com/emarinelli26/bp_only_tv/releases/latest).
+2. Turn the TV on so Windows can see it, and double-click the exe.
+3. The settings window opens with the display it thinks is the TV. Check it
+   and press **Test**.
 
-4. Pick your TV from the list (type part of its name, e.g. `LG TV`).
+Windows may warn that the app is from an unknown publisher, because it isn't
+code-signed. Click **More info → Run anyway**. Every release is built by
+GitHub Actions from the code in this repo, with its SHA-256 listed next to it.
 
-That's it. A hidden background task starts now and at every sign-in.
+## What it does
 
-To also keep the TV-only layout while an emulator runs outside Big Picture:
+- Switches to the TV when Big Picture opens, and back when it closes (after a
+  few seconds, with a notice, in case you reopen it).
+- Stepping away from Big Picture (Windows key, Alt+Tab) keeps the TV. Only
+  closing it brings the desktop back, unless you change that in the settings.
+- `Ctrl+Alt+F12` (or double-clicking the icon) switches between the TV and the
+  desktop by hand, from anywhere, Big Picture included.
+- `Ctrl+Alt+Shift+F12` always brings the desktop back.
+- **Open Big Picture on the TV** in the menu switches first, so Steam starts on
+  the TV.
+- If Windows turns the other displays back on by itself (TV standby, Win+P),
+  the app notices and follows along.
+- Exiting the app always puts the desktop back.
+
+The icon is grey on the desktop and blue while on the TV. The app follows the
+Windows display language (English or Spanish).
+
+## Settings
+
+Right-click the icon → **Settings…**
+
+- **Which display is the TV.** Automatic by default; **Identify displays**
+  shows a big number on each screen.
+- **What switching does:** only the TV (default), the TV as the main display
+  with the others still on, or the same picture on every display.
+- **Keyboard shortcut:** click the box and press the combination.
+- **Start with Windows.**
+
+**Advanced options:**
+
+- **Sound:** move the sound to the TV too, and back afterwards.
+- **Controller combo** (off by default): hold buttons on an Xbox-style
+  controller for 1.5 s to switch. Press **Record** and hold them, for example
+  both sticks (`LS+RS`). Avoid Back, Start and Home: controllers use those for
+  their own shortcuts (a GameSir Nova Lite changes mode with Back+Start+LB).
+- Make the shortcut and the controller combo open Big Picture as well.
+- Whether stepping away from Big Picture goes back to the desktop.
+- How long to wait after Big Picture closes, and programs (emulators) that
+  should also use the TV.
+- A notice when a new version is out.
+
+## Stuck on the TV?
+
+Press `Ctrl+Alt+Shift+F12`. If the app isn't running, press `Win+P` and choose
+**Extend**. The app also restores a leftover layout the next time it starts.
+
+## FAQ
+
+**Does it send anything over the internet?** Only the optional new-version
+check, which asks GitHub for the latest release once a day. No telemetry. It
+never downloads or installs anything by itself.
+
+**Where does it keep its files?** `%LOCALAPPDATA%\BigPictureTV`: settings, the
+saved desktop layout while on the TV, and a log.
+
+**How do I uninstall it?** Untick **Start with Windows**, exit from the menu,
+and delete the exe and the `%LOCALAPPDATA%\BigPictureTV` folder.
+
+**Big Picture isn't detected.** It looks for windows titled *Steam Big Picture
+Mode* or *Steam Big Picture*. If your Steam language uses another title, add it
+to `BigPictureTitles` in `settings.json` and open an issue so it can be built in.
+
+**Something went wrong.** Right-click the icon → **Copy diagnostic info**, and
+paste it in a [new issue](https://github.com/emarinelli26/bp_only_tv/issues/new/choose).
+
+## Other ways to run it
+
+**PowerShell script** (the original version, no exe):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\Install.ps1 -TvName "LG TV" -ExtraProcesses retroarch,dolphin
-```
-
-## Uninstall
-
-```powershell
+powershell -ExecutionPolicy Bypass -File .\Install.ps1          # pick the TV, runs at every sign-in
 powershell -ExecutionPolicy Bypass -File .\Install.ps1 -Uninstall
+.\BigPictureTV.ps1 -Restore                                     # put the saved layout back
 ```
 
-## Running it by hand
+Run only one of the script or the app at a time.
+
+**Command line** (`bptv.exe`, in each release):
 
 ```powershell
-.\BigPictureTV.ps1 -ListDisplays        # show display names
-.\BigPictureTV.ps1 -TvName "LG TV"       # watch for Big Picture (Ctrl+C to stop)
-.\BigPictureTV.ps1 -TvName "LG TV" -TvOnly   # switch to the TV right now
-.\BigPictureTV.ps1 -Restore              # put the saved layout back
+bptv list        # displays, and which one it thinks is the TV
+bptv select 2    # pick the TV yourself
+bptv tv-only     # switch to the TV now
+bptv restore     # put the desktop back
+bptv watch       # switch automatically while Big Picture is open
 ```
 
-## If you get stuck on the TV
+## Building
 
-With the tray app running, press `Ctrl+Alt+Shift+F12`. Otherwise press
-`Win+P` and choose **Extend**, or run `.\BigPictureTV.ps1 -Restore`.
-The watcher also restores a leftover layout the next time it starts.
-
-## BigPictureTV.exe (preview tray app)
-
-`BigPictureTV.exe` does the same as the watcher, from an icon next to the clock.
-It finds the TV on its own. No install and no admin rights needed: download it
-and double-click it.
-
-- The icon is grey on the desktop and blue while only the TV is on.
-- Double-click the icon, or press `Ctrl+Alt+F12` anywhere (Big Picture
-  included), to switch to the TV or back to the desktop. The shortcut can be
-  changed or turned off in the settings.
-- `Ctrl+Alt+Shift+F12` always puts the desktop back, whatever state the app is in.
-- On an Xbox-style (XInput) controller, a button combo held for 1.5 seconds
-  can do the same. It is off by default: record one in the settings, for
-  example both sticks (`LS+RS`), and optionally make the controller buzz
-  when it works. Avoid combos with
-  Back, Start or Home: many controllers use those for their own shortcuts (a
-  GameSir Nova Lite changes mode with Back+Start+LB and drops off the PC).
-- The menu also has: settings, pause automatic switching, choose the TV (or
-  leave it on automatic detection), start with Windows, and open the log folder.
-- **Open Big Picture on the TV** switches first and then opens Big Picture, so
-  Steam starts on the TV.
-- Exiting always puts the desktop back.
-- If Windows turns the other displays back on by itself (the TV went to
-  standby, Win+P), the app notices and goes back to desktop mode. It switches
-  again the next time Big Picture opens.
-
-The first time it runs, the settings window opens with the display it thinks
-is the TV. There you can:
-
-- Pick the TV. **Identify displays** shows a big number on each screen.
-- Choose what happens when Big Picture opens: only the TV (default), the TV as
-  the main display with the others still on, or the same picture on every
-  display.
-- Pick the keyboard shortcut: click the box and press the combination. If
-  another program already uses it, the window says so.
-- Press **Test** to see it right away. It goes back to the desktop by itself
-  after 15 seconds.
-
-Under **Advanced options**:
-
-- Move the sound to the TV too, and back afterwards. It picks the output named
-  after the TV, or the one you choose.
-- Make the keyboard shortcut and the controller combo open Big Picture as well.
-- The controller combo: press **Record** and hold the buttons together.
-- Whether stepping away from Big Picture without closing it (Windows key,
-  Alt+Tab) goes back to the desktop. Off by default.
-- How long to wait after Big Picture closes, and programs, such as emulators,
-  that should also use the TV.
-- A notice when a new version is out on GitHub. It never downloads or installs
-  anything by itself.
-
-If you installed the PowerShell watcher with `Install.ps1`, uninstall it first
-(`Install.ps1 -Uninstall`). Only one of them can run at a time.
-
-The menu is in Spanish or English, following the Windows display language.
-
-## bptv.exe (preview)
-
-A C# version of the same tool lives in `src/`. It is the core of an upcoming
-tray app. It finds the TV on its own, so you don't have to type its name.
+With the .NET 8 SDK:
 
 ```powershell
-bptv list              # displays, and which one it thinks is the TV
-bptv select 2          # optional: pick the TV yourself (number from the list)
-bptv tv-only           # switch to the TV now
-bptv restore           # put the desktop back
-bptv watch             # switch automatically while Big Picture is open (Ctrl+C to stop)
+dotnet test
+dotnet publish src/BigPictureTV.App -c Release -r win-x64 -o publish
 ```
 
-`watch` also accepts `--extra retroarch,dolphin`, `--grace 5` and `--poll 2`. It
-shares its files with the PowerShell script, so either one can restore a layout
-the other saved. Don't run both at once; the second one exits.
-
-Build it with the .NET 8 SDK: `dotnet publish src/BigPictureTV.Cli -c Release -r win-x64 -o publish`.
-Every push also builds both exes in GitHub Actions (artifacts `BigPictureTV-win-x64` and `bptv-win-x64`).
+Every push builds both exes in GitHub Actions. Pushing a tag such as `v1.0.0`
+creates a draft release with them.
 
 ## How it works
 
-- Every 2 seconds it looks for a visible window titled **Steam Big Picture Mode**.
-- On open it saves the current layout to
-  `%LOCALAPPDATA%\BigPictureTV\saved-layout.json`, then uses the Windows
-  display configuration API (`SetDisplayConfig`) to keep only the TV active at
-  position (0,0), which makes it primary.
-- After Big Picture has been closed for 5 seconds it reapplies the saved
-  layout. If that fails (for example after a reboot or driver update changed
-  the adapter IDs), it falls back to Windows' last remembered **Extend** layout.
-- Log: `%LOCALAPPDATA%\BigPictureTV\BigPictureTV.log`.
+On open it saves the current display layout and uses the Windows display
+configuration API (`SetDisplayConfig`) to apply the TV layout. On close it puts
+the saved layout back, falling back to Windows' last **Extend** layout if the
+saved one no longer applies (for example after a driver update).
 
-Options: `-PollSeconds`, `-GraceSeconds`, `-ExtraProcesses`. See
-`Get-Help .\BigPictureTV.ps1 -Full`.
+## License
+
+[MIT](LICENSE)

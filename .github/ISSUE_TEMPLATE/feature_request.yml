@@ -1,0 +1,16 @@
+name: Idea or request / Idea o pedido
+description: Something BigPictureTV could do better.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like? / ¿Qué te gustaría?
+      description: Describe the situation and what you'd want the app to do.
+    validations:
+      required: true
+  - type: textarea
+    id: setup
+    attributes:
+      label: Your setup / Tu equipo
+      description: Displays, TV, controller, anything relevant.
