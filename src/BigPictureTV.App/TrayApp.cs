@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Linq;
+using SynchronizationContext = System.Threading.SynchronizationContext;
 using System.Windows.Forms;
 using BigPictureTV.Core;
 using BigPictureTV.Core.Detection;
@@ -26,6 +27,7 @@ public sealed class TrayApp : IDisposable
     readonly NotifyIcon _icon;
     readonly Timer _timer;
     readonly HotkeyService _hotkeys;
+    readonly GamepadService _gamepad;
     bool _testing;
     DateTime _hotkeyQuietUntil;
     readonly string _exePath = Environment.ProcessPath ?? Application.ExecutablePath;
@@ -41,7 +43,9 @@ public sealed class TrayApp : IDisposable
         _probe = NewProbe();
 
         _icon = new NotifyIcon { ContextMenuStrip = new ContextMenuStrip(), Visible = true };
-        _icon.ContextMenuStrip.Opening += (_, _) => { SyncWithDisplays(); BuildMenu(); };
+        // WinForms cancels opening a menu that has no items yet, so the first
+        // right-click did nothing: build it once now, and allow the opening.
+        _icon.ContextMenuStrip.Opening += (_, e) => { SyncWithDisplays(); BuildMenu(); e.Cancel = false; };
         _icon.MouseDoubleClick += (_, e) => { if (e.Button == MouseButtons.Left) Toggle(); };
         _controller.ModeChanged += OnModeChanged;
         _controller.LayoutChangedOutside += () => Notify(S.ChangedOutside, ToolTipIcon.Info);
@@ -59,11 +63,16 @@ public sealed class TrayApp : IDisposable
         _timer.Start();
 
         _hotkeys = new HotkeyService(log);
-        _hotkeys.TogglePressed += OnToggleHotkey;
+        _hotkeys.TogglePressed += OnToggleShortcut;
         _hotkeys.EmergencyPressed += Emergency;
         if (!_hotkeys.RegisterEmergency())
             _log.Write($"Emergency shortcut {Hotkey.Emergency} is taken by another program.");
         ApplyHotkey();
+
+        var ui = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
+        _gamepad = new GamepadService(log, () => ui.Post(_ => OnToggleShortcut(), null));
+        ApplyCombo();
+        BuildMenu();
 
         if (!_settings.FirstRunDone)
         {
@@ -90,12 +99,13 @@ public sealed class TrayApp : IDisposable
         // Off while the window is open, so pressing it in the shortcut box
         // records it instead of switching displays.
         _hotkeys.SetToggle(null);
+        _gamepad.Combo = GamepadButtons.None;
         try
         {
             var result = WpfDialogs.ShowSettings(_settings, _display.ListDisplays(), firstRun,
                 StartupRegistration.IsEnabled, TestSettings,
                 () => _controller.Mode == DisplayMode.Desktop && !_store.HasSaved,
-                _hotkeys.IsAvailable);
+                _hotkeys.IsAvailable, () => _gamepad.Pressed);
             if (result is { } saved)
             {
                 ApplySettings(saved.Settings);
@@ -114,6 +124,7 @@ public sealed class TrayApp : IDisposable
         finally
         {
             ApplyHotkey();
+            ApplyCombo();
             MemoryTrim.Soon();
         }
     }
@@ -143,9 +154,18 @@ public sealed class TrayApp : IDisposable
         Notify(string.Format(S.HotkeyTakenNotify, hotkey), ToolTipIcon.Warning);
     }
 
+    void ApplyCombo()
+    {
+        _gamepad.Rumble = _settings.ControllerRumble;
+        var combo = GamepadCombo.Parse(_settings.ControllerCombo) ?? GamepadButtons.None;
+        if (combo == _gamepad.Combo) return;
+        _gamepad.Combo = combo;
+        _log.Write(combo == GamepadButtons.None ? "Controller combo off." : $"Controller combo: {GamepadCombo.Format(combo)}.");
+    }
+
     // Switching displays takes a moment; a second press in the meantime
     // (or right after) would undo the first.
-    void OnToggleHotkey()
+    void OnToggleShortcut()
     {
         if (_testing || DateTime.UtcNow < _hotkeyQuietUntil) return;
         Toggle();
@@ -344,6 +364,7 @@ public sealed class TrayApp : IDisposable
         _disposed = true;
         _timer.Stop();
         _hotkeys.Dispose();
+        _gamepad.Dispose();
         try { _controller.Shutdown(); }
         catch (Exception e) { _log.Write($"Restoring the desktop on exit failed: {e.Message}"); }
         _icon.Visible = false;

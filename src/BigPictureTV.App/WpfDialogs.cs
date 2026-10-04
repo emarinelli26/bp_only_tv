@@ -22,9 +22,11 @@ static class WpfDialogs
     /// <summary>Shows the settings window and waits. Null if the user cancelled.</summary>
     public static (AppSettings Settings, bool StartWithWindows)? ShowSettings(AppSettings settings,
         IReadOnlyList<DisplayInfo> displays, bool firstRun, bool startWithWindows,
-        Func<AppSettings, bool> test, Func<bool> canTest, Func<Hotkey, bool> hotkeyAvailable)
+        Func<AppSettings, bool> test, Func<bool> canTest, Func<Hotkey, bool> hotkeyAvailable,
+        Func<GamepadButtons?> controllerButtons)
     {
-        _settings = new SettingsWindow(settings, displays, firstRun, startWithWindows, test, canTest, hotkeyAvailable);
+        _settings = new SettingsWindow(settings, displays, firstRun, startWithWindows, test, canTest, hotkeyAvailable,
+            controllerButtons);
         try
         {
             return _settings.ShowDialog() == true ? (_settings.Result, _settings.StartWithWindows) : null;

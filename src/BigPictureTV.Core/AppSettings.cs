@@ -46,6 +46,19 @@ public sealed class AppSettings
     /// </summary>
     public string Hotkey { get; set; } = Input.Hotkey.DefaultToggle.ToString();
 
+    /// <summary>
+    /// Controller buttons that, held together, switch between the TV and the
+    /// desktop, like "LS+RS". Empty (the default) turns it off: controllers
+    /// have their own button shortcuts, so the user picks one that is safe.
+    /// </summary>
+    public string ControllerCombo { get; set; } = "";
+
+    /// <summary>
+    /// Buzz the controller when the combo works. Off by default, as not
+    /// every third-party controller handles vibration from outside a game.
+    /// </summary>
+    public bool ControllerRumble { get; set; }
+
     /// <summary>Process names (without .exe) that also keep the TV-only layout while they run.</summary>
     public List<string> ExtraProcesses { get; set; } = new();
 

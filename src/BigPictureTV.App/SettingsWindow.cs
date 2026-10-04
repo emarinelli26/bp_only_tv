@@ -25,16 +25,23 @@ public sealed class SettingsWindow : Window
     readonly Func<AppSettings, bool> _test;
     readonly Func<bool> _canTest;
     readonly Func<Hotkey, bool> _hotkeyAvailable;
+    readonly Func<GamepadButtons?> _controllerButtons;
 
     readonly RadioButton _auto;
     readonly List<(RadioButton Button, DisplayInfo Display)> _tvChoices = new();
     readonly RadioButton _tvOnly, _tvPrimary, _duplicate;
     readonly TextBox _grace, _extra;
-    readonly CheckBox _startup, _desktopWhenHidden;
+    readonly CheckBox _startup, _desktopWhenHidden, _rumble;
     readonly TextBlock _testMessage;
     readonly TextBox _hotkeyBox;
     readonly TextBlock _hotkeyMessage;
     Hotkey? _hotkey;
+    readonly TextBox _comboBox;
+    readonly TextBlock _comboMessage;
+    readonly System.Windows.Threading.DispatcherTimer _comboTimer = new() { Interval = TimeSpan.FromMilliseconds(50) };
+    GamepadButtons _combo;
+    GamepadButtons _comboSeen;
+    DateTime _comboSeenSince, _comboDeadline;
 
     public AppSettings Result => _draft;
     public bool StartWithWindows => _startup.IsChecked == true;
@@ -42,9 +49,12 @@ public sealed class SettingsWindow : Window
     /// <param name="test">Applies the given settings on the TV, waits for the user, and goes back. False if it couldn't switch.</param>
     /// <param name="canTest">False while the app itself is on the TV.</param>
     /// <param name="hotkeyAvailable">False if another program already uses that combination.</param>
+    /// <param name="controllerButtons">Buttons held right now on any controller; null if none is connected.</param>
     public SettingsWindow(AppSettings settings, IReadOnlyList<DisplayInfo> displays, bool firstRun,
-        bool startWithWindows, Func<AppSettings, bool> test, Func<bool> canTest, Func<Hotkey, bool> hotkeyAvailable)
+        bool startWithWindows, Func<AppSettings, bool> test, Func<bool> canTest, Func<Hotkey, bool> hotkeyAvailable,
+        Func<GamepadButtons?> controllerButtons)
     {
+        _controllerButtons = controllerButtons;
         _hotkeyAvailable = hotkeyAvailable;
         _draft = settings.Clone();
         _displays = displays;
@@ -135,6 +145,34 @@ public sealed class SettingsWindow : Window
         });
         ShowHotkey();
 
+        // Controller combo.
+        root.Children.Add(Heading(S.ComboGroup));
+        _combo = GamepadCombo.Parse(_draft.ControllerCombo) ?? GamepadButtons.None;
+        var comboRow = new StackPanel { Orientation = Orientation.Horizontal };
+        _comboBox = new TextBox { IsReadOnly = true, Width = 220 };
+        comboRow.Children.Add(_comboBox);
+        var record = Button(S.ComboRecord);
+        record.Click += (_, _) => StartComboCapture();
+        comboRow.Children.Add(record);
+        var noCombo = Button(S.ComboNone);
+        noCombo.Click += (_, _) => { StopComboCapture(); _combo = GamepadButtons.None; _comboMessage!.Text = ""; ShowCombo(); };
+        comboRow.Children.Add(noCombo);
+        root.Children.Add(comboRow);
+        _comboMessage = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = System.Windows.Media.Brushes.Firebrick };
+        root.Children.Add(_comboMessage);
+        root.Children.Add(new TextBlock
+        {
+            Text = string.Format(S.ComboHint, GamepadCombo.Hold.TotalSeconds),
+            FontSize = 12,
+            Opacity = 0.7,
+            TextWrapping = TextWrapping.Wrap,
+        });
+        _rumble = new CheckBox { Content = S.ComboRumble, IsChecked = _draft.ControllerRumble, Margin = new Thickness(0, 6, 0, 0) };
+        root.Children.Add(_rumble);
+        _comboTimer.Tick += (_, _) => ComboCaptureTick();
+        Closed += (_, _) => _comboTimer.Stop();
+        ShowCombo();
+
         // The rest.
         root.Children.Add(Heading(""));
         var graceRow = new StackPanel { Orientation = Orientation.Horizontal };
@@ -199,6 +237,58 @@ public sealed class SettingsWindow : Window
         }
     }
 
+    void ShowCombo() => _comboBox.Text = _combo == GamepadButtons.None ? S.HotkeyOff : GamepadCombo.Format(_combo);
+
+    // Recording: wait until the same buttons (two or more) stay held for a second.
+    void StartComboCapture()
+    {
+        if (_controllerButtons() == null)
+        {
+            _comboMessage.Text = S.ComboNoController;
+            return;
+        }
+        _comboMessage.Text = "";
+        _comboBox.Text = S.ComboRecording;
+        _comboSeen = GamepadButtons.None;
+        _comboSeenSince = DateTime.UtcNow;
+        _comboDeadline = DateTime.UtcNow.AddSeconds(10);
+        _comboTimer.Start();
+    }
+
+    void StopComboCapture()
+    {
+        _comboTimer.Stop();
+        ShowCombo();
+    }
+
+    void ComboCaptureTick()
+    {
+        var now = DateTime.UtcNow;
+        var pressed = _controllerButtons();
+        if (pressed == null)
+        {
+            StopComboCapture();
+            _comboMessage.Text = S.ComboNoController;
+            return;
+        }
+        if (pressed.Value != _comboSeen)
+        {
+            _comboSeen = pressed.Value;
+            _comboSeenSince = now;
+        }
+        else if (GamepadCombo.IsValid(_comboSeen) && now - _comboSeenSince >= TimeSpan.FromSeconds(1))
+        {
+            _combo = _comboSeen;
+            StopComboCapture();
+            return;
+        }
+        if (now > _comboDeadline)
+        {
+            StopComboCapture();
+            _comboMessage.Text = S.ComboTimeout;
+        }
+    }
+
     void RunTest()
     {
         _testMessage.Text = "";
@@ -230,6 +320,8 @@ public sealed class SettingsWindow : Window
         }
         _draft.GraceSeconds = grace;
         _draft.Hotkey = _hotkey?.ToString() ?? "";
+        _draft.ControllerRumble = _rumble.IsChecked == true;
+        _draft.ControllerCombo = _combo == GamepadButtons.None ? "" : GamepadCombo.Format(_combo);
         _draft.DesktopWhenBigPictureHidden = _desktopWhenHidden.IsChecked == true;
         _draft.ExtraProcesses = BigPictureWatcher.NormalizeProcessNames(new[] { _extra.Text }).ToList();
         _draft.FirstRunDone = true;
