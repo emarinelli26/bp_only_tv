@@ -65,6 +65,8 @@ public sealed class Strings
     public string SteamNotFound { get; init; } = "";
     public string UpdateAvailable { get; init; } = "";
     public string DownloadUpdate { get; init; } = "";
+    public string CopyDiagnostics { get; init; } = "";
+    public string DiagnosticsCopied { get; init; } = "";
     public string ComboGroup { get; init; } = "";
     public string ComboHint { get; init; } = "";
     public string ComboRecord { get; init; } = "";
@@ -148,6 +150,8 @@ public sealed class Strings
         SteamNotFound = "Couldn't open Big Picture. Is Steam installed?",
         UpdateAvailable = "BigPictureTV {0} is available. Click to download it.",
         DownloadUpdate = "Download version {0}…",
+        CopyDiagnostics = "Copy diagnostic info",
+        DiagnosticsCopied = "Diagnostic info copied. Paste it in your GitHub issue.",
         LeavingTvSoon = "Big Picture closed. Going back to the desktop in {0} s…",
         HotkeyGroup = "Keyboard shortcut to switch between the TV and the desktop",
         HotkeyHint = "Click the box and press the combination. {0} always brings the desktop back.",
@@ -225,6 +229,8 @@ public sealed class Strings
         SteamNotFound = "No se pudo abrir Big Picture. ¿Está instalado Steam?",
         UpdateAvailable = "Hay una versión nueva de BigPictureTV ({0}). Hacé clic para descargarla.",
         DownloadUpdate = "Descargar la versión {0}…",
+        CopyDiagnostics = "Copiar info de diagnóstico",
+        DiagnosticsCopied = "Info de diagnóstico copiada. Pegala en tu reporte de GitHub.",
         LeavingTvSoon = "Se cerró Big Picture. Volviendo al escritorio en {0} s…",
         HotkeyGroup = "Atajo de teclado para cambiar entre la TV y el escritorio",
         HotkeyHint = "Hacé clic en el cuadro y presioná la combinación. {0} siempre vuelve al escritorio.",

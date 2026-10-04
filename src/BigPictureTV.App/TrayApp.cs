@@ -262,6 +262,24 @@ public sealed class TrayApp : IDisposable
         Notify(string.Format(S.UpdateAvailable, found.Value.Tag), ToolTipIcon.Info, found.Value.Url);
     }
 
+    void CopyDiagnostics()
+    {
+        try
+        {
+            var displays = _display.ListDisplays();
+            var (tv, reason) = TvSelector.Select(displays, _settings);
+            string report = DiagnosticReport.Build(UpdateChecker.Current.ToString(3),
+                System.Runtime.InteropServices.RuntimeInformation.OSDescription, displays, tv, reason, _settings,
+                _controller.Mode, DiagnosticReport.Tail(AppPaths.LogFile, 40));
+            Clipboard.SetText(report);
+            Notify(S.DiagnosticsCopied, ToolTipIcon.Info);
+        }
+        catch (Exception e)
+        {
+            _log.Write($"Copying diagnostic info failed: {e.Message}");
+        }
+    }
+
     static void OpenUrl(string url)
     {
         try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })?.Dispose(); }
@@ -410,6 +428,10 @@ public sealed class TrayApp : IDisposable
         var startup = new ToolStripMenuItem(S.StartWithWindows) { Checked = StartupRegistration.IsEnabled };
         startup.Click += (_, _) => StartupRegistration.Set(!StartupRegistration.IsEnabled, _exePath);
         menu.Items.Add(startup);
+
+        var diagnostics = new ToolStripMenuItem(S.CopyDiagnostics);
+        diagnostics.Click += (_, _) => CopyDiagnostics();
+        menu.Items.Add(diagnostics);
 
         var logs = new ToolStripMenuItem(S.OpenLogFolder);
         logs.Click += (_, _) => Process.Start(new ProcessStartInfo(AppPaths.DataDir) { UseShellExecute = true });
