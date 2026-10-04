@@ -122,6 +122,7 @@ public class ModeControllerTests
     public void StartResumesTvModeIfBigPictureIsStillOpen()
     {
         _sw.HasSavedLayout = true;
+        _sw.TvOnly = true;
         _c.Start(bigPictureOpen: true);
         Assert.Equal(0, _sw.Restores);
         Assert.Equal(DisplayMode.TvAuto, _c.Mode);
@@ -149,5 +150,81 @@ public class ModeControllerTests
         _c.Tick(false, T0.AddSeconds(1));
         _c.Tick(false, T0.AddSeconds(10));
         Assert.Equal(new[] { DisplayMode.TvAuto, DisplayMode.Desktop }, seen);
+    }
+
+    [Fact]
+    public void FollowsWindowsWhenTheDesktopComesBackOnItsOwn()
+    {
+        bool outside = false;
+        _c.LayoutChangedOutside += () => outside = true;
+        _c.Tick(true, T0);
+        _sw.TvOnly = false; // e.g. the TV went to standby and Windows turned the monitor back on
+
+        _c.Tick(true, T0.AddSeconds(2));
+        Assert.Equal(DisplayMode.TvAuto, _c.Mode); // one odd reading is not enough
+        _c.Tick(true, T0.AddSeconds(4));
+        Assert.Equal(DisplayMode.Desktop, _c.Mode);
+        Assert.True(outside);
+        Assert.False(_sw.HasSavedLayout);
+        Assert.Equal(0, _sw.Restores);
+    }
+
+    [Fact]
+    public void AMomentaryGlitchIsIgnored()
+    {
+        _c.Tick(true, T0);
+        _sw.TvOnly = false;
+        _c.Tick(true, T0.AddSeconds(2));
+        _sw.TvOnly = true;
+        _c.Tick(true, T0.AddSeconds(4));
+        _sw.TvOnly = false;
+        _c.Tick(true, T0.AddSeconds(6));
+        Assert.Equal(DisplayMode.TvAuto, _c.Mode);
+    }
+
+    [Fact]
+    public void DoesNotFightWindowsWhileBigPictureStaysOpen()
+    {
+        _c.Tick(true, T0);
+        _sw.TvOnly = false;
+        _c.Tick(true, T0.AddSeconds(2));
+        _c.Tick(true, T0.AddSeconds(4));
+        _c.Tick(true, T0.AddSeconds(6));
+        Assert.Equal(1, _sw.Switches);
+
+        _c.Tick(false, T0.AddSeconds(8));
+        _c.Tick(true, T0.AddSeconds(10));
+        Assert.Equal(2, _sw.Switches);
+        Assert.Equal(DisplayMode.TvAuto, _c.Mode);
+    }
+
+    [Fact]
+    public void ManualModeAlsoNoticesTheDesktopCameBack()
+    {
+        _c.Toggle(bigPictureOpen: false);
+        _sw.TvOnly = false;
+        _c.Tick(false, T0);
+        _c.Tick(false, T0.AddSeconds(2));
+        Assert.Equal(DisplayMode.Desktop, _c.Mode);
+    }
+
+    [Fact]
+    public void SyncBeforeTheMenuChecksRightAway()
+    {
+        _c.Tick(true, T0);
+        _sw.TvOnly = false;
+        _c.SyncWithDisplays(bigPictureOpen: true);
+        Assert.Equal(DisplayMode.Desktop, _c.Mode);
+    }
+
+    [Fact]
+    public void TogglingWhenTheDesktopIsAlreadyBackDoesNotSwitchToTheTv()
+    {
+        _c.Tick(true, T0);
+        _sw.TvOnly = false;
+        _c.Toggle(bigPictureOpen: true); // the user meant "back to the desktop"
+        Assert.Equal(DisplayMode.Desktop, _c.Mode);
+        Assert.Equal(1, _sw.Switches);
+        Assert.Equal(0, _sw.Restores);
     }
 }

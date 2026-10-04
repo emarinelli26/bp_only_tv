@@ -27,6 +27,9 @@ public sealed class ModeController
 
     DateTime? _closedSince;
 
+    // Consecutive checks that found the displays no longer TV-only.
+    int _mismatches;
+
     // Set after a switch attempt (failed, or undone by the user) while Big
     // Picture stays open, so we don't retry on every check. Cleared when it closes.
     bool _suppressed;
@@ -45,6 +48,12 @@ public sealed class ModeController
     public TimeSpan Grace { get; set; } = TimeSpan.FromSeconds(5);
 
     public event Action<DisplayMode>? ModeChanged;
+
+    /// <summary>Raised when something outside the app (Windows, Win+P, the TV) brought the other displays back.</summary>
+    public event Action? LayoutChangedOutside;
+
+    /// <summary>How many checks in a row must disagree before we believe it (ignores a momentary glitch).</summary>
+    public int MismatchesToConfirm { get; set; } = 2;
 
     /// <summary>Call once at startup: picks up where a previous run left off.</summary>
     public void Start(bool bigPictureOpen)
@@ -81,6 +90,7 @@ public sealed class ModeController
                     break;
 
                 case DisplayMode.TvAuto:
+                    if (LayoutLeftTv(bigPictureOpen, MismatchesToConfirm)) break;
                     if (bigPictureOpen) { _closedSince = null; break; }
                     _closedSince ??= now;
                     if (now - _closedSince.Value >= Grace)
@@ -92,8 +102,22 @@ public sealed class ModeController
                     break;
 
                 case DisplayMode.TvManual:
-                    break; // only the user ends manual mode
+                    LayoutLeftTv(bigPictureOpen, MismatchesToConfirm);
+                    break; // otherwise only the user ends manual mode
             }
+        }
+    }
+
+    /// <summary>
+    /// Checks right away that the displays still match the mode, e.g. before
+    /// showing the menu, so it never offers "back to the desktop" when the
+    /// desktop is already back.
+    /// </summary>
+    public void SyncWithDisplays(bool bigPictureOpen)
+    {
+        lock (_gate)
+        {
+            if (Mode != DisplayMode.Desktop) LayoutLeftTv(bigPictureOpen, required: 1);
         }
     }
 
@@ -102,6 +126,8 @@ public sealed class ModeController
     {
         lock (_gate)
         {
+            // Already back on the desktop (changed outside the app): that is what the user wanted.
+            if (Mode != DisplayMode.Desktop && LayoutLeftTv(bigPictureOpen, required: 1)) return;
             if (Mode == DisplayMode.Desktop)
             {
                 if (_switcher.SwitchToTv()) SetMode(DisplayMode.TvManual);
@@ -144,6 +170,29 @@ public sealed class ModeController
         }
     }
 
+    // While on the TV, Windows can bring the other displays back on its own:
+    // the TV went to standby or switched input, the driver reset, someone
+    // pressed Win+P. Follow what the displays really show instead of fighting
+    // it, and wait for Big Picture to reopen (or a toggle) to switch again.
+    bool LayoutLeftTv(bool bigPictureOpen, int required)
+    {
+        if (_switcher.IsTvOnly())
+        {
+            _mismatches = 0;
+            return false;
+        }
+        if (++_mismatches < required) return false;
+
+        _log.Write("The displays were changed outside BigPictureTV; back in desktop mode.");
+        _mismatches = 0;
+        _switcher.ForgetSavedLayout();
+        _closedSince = null;
+        _suppressed = bigPictureOpen;
+        SetMode(DisplayMode.Desktop);
+        LayoutChangedOutside?.Invoke();
+        return true;
+    }
+
     void GoToDesktop()
     {
         _switcher.RestoreDesktop();
@@ -153,6 +202,7 @@ public sealed class ModeController
 
     void SetMode(DisplayMode mode)
     {
+        _mismatches = 0;
         if (Mode == mode) return;
         Mode = mode;
         ModeChanged?.Invoke(mode);

@@ -37,9 +37,10 @@ public sealed class TrayApp : IDisposable
         _probe = new BigPictureWatcher(_settings.BigPictureTitles, _settings.ExtraProcesses);
 
         _icon = new NotifyIcon { ContextMenuStrip = new ContextMenuStrip(), Visible = true };
-        _icon.ContextMenuStrip.Opening += (_, _) => BuildMenu();
+        _icon.ContextMenuStrip.Opening += (_, _) => { SyncWithDisplays(); BuildMenu(); };
         _icon.MouseDoubleClick += (_, e) => { if (e.Button == MouseButtons.Left) Toggle(); };
         _controller.ModeChanged += OnModeChanged;
+        _controller.LayoutChangedOutside += () => Notify(S.ChangedOutside, ToolTipIcon.Info);
 
         StartupRegistration.RefreshPath(_exePath);
 
@@ -63,6 +64,12 @@ public sealed class TrayApp : IDisposable
         {
             _log.Write($"Check failed: {e.Message}");
         }
+    }
+
+    void SyncWithDisplays()
+    {
+        try { _controller.SyncWithDisplays(_probe.IsOpen()); }
+        catch (Exception e) { _log.Write($"Display check failed: {e.Message}"); }
     }
 
     void Toggle()

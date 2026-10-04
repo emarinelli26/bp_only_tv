@@ -26,6 +26,7 @@ public sealed class Strings
     public string NowOnTv { get; init; } = "";
     public string NowOnDesktop { get; init; } = "";
     public string SwitchFailed { get; init; } = "";
+    public string ChangedOutside { get; init; } = "";
 
     static Strings English() => new()
     {
@@ -47,6 +48,7 @@ public sealed class Strings
         NowOnTv = "Showing only the TV.",
         NowOnDesktop = "Desktop restored.",
         SwitchFailed = "Couldn't switch to the TV. Check that it's on, or pick it under TV.",
+        ChangedOutside = "Windows turned the other displays back on. Big Picture will switch to the TV again next time it opens.",
     };
 
     static Strings Spanish() => new()
@@ -69,5 +71,6 @@ public sealed class Strings
         NowOnTv = "Mostrando solo la TV.",
         NowOnDesktop = "Escritorio restaurado.",
         SwitchFailed = "No se pudo pasar a la TV. Revisá que esté encendida o elegila en el menú TV.",
+        ChangedOutside = "Windows volvió a encender las otras pantallas. La próxima vez que abras Big Picture pasa a la TV de nuevo.",
     };
 }
