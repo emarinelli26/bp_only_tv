@@ -1,0 +1,21 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet test -c Release
+      - run: dotnet publish src/BigPictureTV.Cli -c Release -r win-x64 -o publish
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bptv-win-x64
+          path: publish/bptv.exe
