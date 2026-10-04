@@ -61,6 +61,9 @@ and double-click it.
   included), to switch to the TV or back to the desktop. The shortcut can be
   changed or turned off in the settings.
 - `Ctrl+Alt+Shift+F12` always puts the desktop back, whatever state the app is in.
+- On an Xbox-style (XInput) controller, hold `Back+Start+LB` for 1.5 seconds
+  to do the same; the controller buzzes when it works. The buttons can be
+  changed or turned off in the settings.
 - The menu also has: settings, pause automatic switching, choose the TV (or
   leave it on automatic detection), start with Windows, and open the log folder.
 - Exiting always puts the desktop back.
@@ -79,6 +82,7 @@ is the TV. There you can:
   key, Alt+Tab) goes back to the desktop. Off by default.
 - Pick the keyboard shortcut: click the box and press the combination. If
   another program already uses it, the window says so.
+- Pick the controller buttons: press **Record** and hold them together.
 - Set how long to wait after Big Picture closes, and list programs, such as
   emulators, that should also use the TV.
 - Press **Test** to see it right away. It goes back to the desktop by itself

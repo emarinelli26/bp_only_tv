@@ -46,6 +46,12 @@ public sealed class AppSettings
     /// </summary>
     public string Hotkey { get; set; } = Input.Hotkey.DefaultToggle.ToString();
 
+    /// <summary>
+    /// Controller buttons that, held together, switch between the TV and the
+    /// desktop, like "Back+Start+LB". Empty turns it off.
+    /// </summary>
+    public string ControllerCombo { get; set; } = Input.GamepadCombo.Format(Input.GamepadCombo.Default);
+
     /// <summary>Process names (without .exe) that also keep the TV-only layout while they run.</summary>
     public List<string> ExtraProcesses { get; set; } = new();
 
