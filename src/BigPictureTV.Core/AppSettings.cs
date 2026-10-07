@@ -54,6 +54,9 @@ public sealed class AppSettings
     /// </summary>
     public string ControllerCombo { get; set; } = "";
 
+    /// <summary>Seconds to hold <see cref="ControllerCombo"/> (0 to 5; 0 is a quick tap).</summary>
+    public double ControllerComboHold { get; set; } = 1.5;
+
     /// <summary>
     /// Buzz the controller when the combo works. Off by default, as not
     /// every third-party controller handles vibration from outside a game.
@@ -76,11 +79,14 @@ public sealed class AppSettings
     public bool ShortcutOpensTvMenu { get; set; } = true;
 
     /// <summary>
-    /// Controller button that, tapped on its own, opens and closes the TV
-    /// menu from anywhere: "Back" (View on Xbox, Share on PlayStation, the
-    /// default), "Start", "LS", "RS", or empty for none.
+    /// Controller button (or buttons, like "Back+Down") that open and close
+    /// the TV menu from anywhere. "Back" (View on Xbox, Share on PlayStation)
+    /// by default; empty for none.
     /// </summary>
     public string ControllerMenuButton { get; set; } = "Back";
+
+    /// <summary>Seconds to hold <see cref="ControllerMenuButton"/> (0 to 5; 0, the default, is a quick tap).</summary>
+    public double ControllerMenuHold { get; set; }
 
     /// <summary>Tiles of the TV menu, in order.</summary>
     public List<TvApp> TvMenuApps { get; set; } = TvApp.Defaults();

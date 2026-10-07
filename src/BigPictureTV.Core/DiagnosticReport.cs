@@ -31,8 +31,8 @@ public static class DiagnosticReport
         sb.AppendLine();
         sb.AppendLine("Settings:");
         sb.AppendLine($"  Layout: {settings.Layout}; grace: {settings.GraceSeconds} s; desktop when hidden: {settings.DesktopWhenBigPictureHidden}");
-        sb.AppendLine($"  Shortcut: {(settings.Hotkey.Length > 0 ? settings.Hotkey : "off")}; controller combo: {(settings.ControllerCombo.Length > 0 ? settings.ControllerCombo : "off")}");
-        sb.AppendLine($"  Sound to TV: {settings.SwitchAudio}; shortcut opens Big Picture: {settings.ShortcutOpensBigPicture}; TV menu: {settings.ShortcutOpensTvMenu}; menu button: {(settings.ControllerMenuButton.Length > 0 ? settings.ControllerMenuButton : "off")}");
+        sb.AppendLine($"  Shortcut: {(settings.Hotkey.Length > 0 ? settings.Hotkey : "off")}; controller combo: {(settings.ControllerCombo.Length > 0 ? $"{settings.ControllerCombo} ({settings.ControllerComboHold} s)" : "off")}");
+        sb.AppendLine($"  Sound to TV: {settings.SwitchAudio}; shortcut opens Big Picture: {settings.ShortcutOpensBigPicture}; TV menu: {settings.ShortcutOpensTvMenu}; menu button: {(settings.ControllerMenuButton.Length > 0 ? $"{settings.ControllerMenuButton} ({settings.ControllerMenuHold} s)" : "off")}");
         sb.AppendLine($"  TV menu tiles: {string.Join(", ", settings.TvMenuApps.Select(a => $"{a} ({a.Kind})"))}");
         sb.AppendLine($"  Extra programs: {(settings.ExtraProcesses.Count > 0 ? string.Join(", ", settings.ExtraProcesses) : "none")}");
         sb.AppendLine($"  Big Picture titles: {string.Join(", ", settings.BigPictureTitles)}");

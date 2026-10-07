@@ -7,9 +7,12 @@ using BigPictureTV.Core.Input;
 namespace BigPictureTV.App;
 
 /// <summary>
-/// Controllers through SDL, the library most PC games use for them: Xbox
-/// style ones, and also PlayStation (DualShock 4, DualSense), Switch and many
-/// others that Windows' XInput doesn't see. All calls on one thread.
+/// PlayStation (DualShock 4, DualSense), Switch and other HID controllers
+/// that Windows' XInput doesn't see, through SDL's HIDAPI drivers (SDL is the
+/// library most PC games use for controllers). Its other Windows back ends
+/// (XInput, DirectInput, raw input, Windows.Gaming.Input) stay off: XInput
+/// is read directly, and fewer moving parts in a program that runs all day.
+/// All calls on one thread.
 /// </summary>
 sealed class SdlPads : IDisposable
 {
@@ -29,6 +32,12 @@ sealed class SdlPads : IDisposable
         {
             // Keep reading while another program (Big Picture, the browser) is in front.
             SDL_SetHint("SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS", "1");
+            foreach (var off in new[]
+            {
+                "SDL_XINPUT_ENABLED", "SDL_DIRECTINPUT_ENABLED", "SDL_JOYSTICK_RAWINPUT", "SDL_JOYSTICK_WGI",
+                "SDL_JOYSTICK_HIDAPI_XBOX", "SDL_JOYSTICK_HIDAPI_STEAM", "SDL_JOYSTICK_HIDAPI_STEAMDECK",
+            })
+                SDL_SetHint(off, "0");
             if (SDL_Init(SDL_INIT_GAMECONTROLLER) != 0)
             {
                 log.Write($"SDL didn't start ({Utf8(SDL_GetError())}); using XInput for controllers.");
@@ -56,7 +65,7 @@ sealed class SdlPads : IDisposable
         {
             SDL_GameControllerClose(_open[id]);
             _open.Remove(id);
-            _log.Write($"Controller {id} disconnected.");
+            _log.Write($"Controller {SdlId(id)} disconnected.");
         }
 
         if (probe)
@@ -69,7 +78,7 @@ sealed class SdlPads : IDisposable
                 var pad = SDL_GameControllerOpen(i);
                 if (pad == IntPtr.Zero) continue;
                 _open[id] = pad;
-                _log.Write($"Controller {id} connected: {Utf8(SDL_GameControllerName(pad))}.");
+                _log.Write($"Controller {SdlId(id)} connected: {Utf8(SDL_GameControllerName(pad))}.");
             }
         }
 
@@ -106,9 +115,9 @@ sealed class SdlPads : IDisposable
         return y >= StickThreshold ? GamepadButtons.Down : y <= -StickThreshold ? GamepadButtons.Up : GamepadButtons.None;
     }
 
-    public void Buzz(int id)
+    public void BuzzAll()
     {
-        if (_open.TryGetValue(id, out var pad)) SDL_GameControllerRumble(pad, 30000, 30000, 200);
+        foreach (var pad in _open.Values) SDL_GameControllerRumble(pad, 30000, 30000, 200);
     }
 
     public void Dispose()
@@ -117,6 +126,8 @@ sealed class SdlPads : IDisposable
         _open.Clear();
         SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);
     }
+
+    static int SdlId(int id) => 100 + id;
 
     static string Utf8(IntPtr text) => text == IntPtr.Zero ? "" : Marshal.PtrToStringUTF8(text) ?? "";
 

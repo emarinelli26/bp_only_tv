@@ -1,57 +1,51 @@
 namespace BigPictureTV.Core.Input;
 
 /// <summary>
-/// Notices a quick press of one button on its own (like Share/View to open
-/// the TV menu): fires when it is let go, if nothing else was pressed in the
-/// meantime and it wasn't held long, so combos and holds that use the same
-/// button never trigger it.
+/// Notices a quick press of exactly some buttons (one, like Share to open
+/// the TV menu, or several together): fires when they are all let go, if
+/// nothing else was pressed in the meantime and it wasn't held long, so
+/// combos and holds that share a button never trigger it.
 /// </summary>
 public sealed class TapDetector
 {
     public static readonly TimeSpan MaxTap = TimeSpan.FromMilliseconds(800);
 
-    // The buttons that can open the menu, as stored in the settings.
-    public static readonly GamepadButtons[] Choices =
-        { GamepadButtons.Back, GamepadButtons.Start, GamepadButtons.LS, GamepadButtons.RS };
-
     DateTime? _since;
-    bool _spoiled;
+    GamepadButtons _seen;
 
-    /// <returns>True the moment a clean tap of <paramref name="button"/> ends.</returns>
-    public bool Update(GamepadButtons button, GamepadButtons pressed, DateTime now)
+    /// <returns>True the moment a clean tap of <paramref name="buttons"/> ends.</returns>
+    public bool Update(GamepadButtons buttons, GamepadButtons pressed, DateTime now)
     {
-        if (button == GamepadButtons.None)
+        if (pressed != GamepadButtons.None)
         {
-            _since = null;
-            return false;
-        }
-        bool held = pressed.HasFlag(button);
-        if (held)
-        {
-            if (_since == null)
-            {
-                _since = now;
-                _spoiled = pressed != button; // pressed together with something else
-            }
-            else if (pressed != button)
-            {
-                _spoiled = true;
-            }
+            _since ??= now;
+            _seen |= pressed;
             return false;
         }
         if (_since == null) return false;
-        bool tap = !_spoiled && now - _since.Value <= MaxTap;
+        bool tap = buttons != GamepadButtons.None && _seen == buttons && now - _since.Value <= MaxTap;
         _since = null;
+        _seen = GamepadButtons.None;
         return tap;
     }
+}
 
-    /// <summary>Reads "Back" (also View, Select or Share), "Start" (Menu, Options), "LS" (L3) or "RS" (R3). None when empty or unknown.</summary>
-    public static GamepadButtons Parse(string? text) => (text ?? "").Trim().ToLowerInvariant() switch
+/// <summary>
+/// A controller shortcut from the settings: some buttons and how long to
+/// hold them. Zero means a quick tap (see <see cref="TapDetector"/>).
+/// </summary>
+public sealed class BindingDetector
+{
+    public const double MaxHoldSeconds = 5;
+
+    readonly TapDetector _tap = new();
+    readonly ComboDetector _hold = new();
+
+    public bool Update(GamepadButtons buttons, double holdSeconds, GamepadButtons pressed, DateTime now)
     {
-        "back" or "view" or "select" or "share" => GamepadButtons.Back,
-        "start" or "menu" or "options" => GamepadButtons.Start,
-        "ls" or "l3" => GamepadButtons.LS,
-        "rs" or "r3" => GamepadButtons.RS,
-        _ => GamepadButtons.None,
-    };
+        bool tapped = _tap.Update(buttons, pressed, now);
+        bool held = _hold.Update(buttons, pressed, now, TimeSpan.FromSeconds(Math.Clamp(holdSeconds, 0.1, MaxHoldSeconds)));
+        if (buttons == GamepadButtons.None) return false;
+        return holdSeconds <= 0 ? tapped : held;
+    }
 }

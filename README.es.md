@@ -59,9 +59,10 @@ Clic derecho en el ícono → **Ajustes…**
 **Opciones avanzadas:**
 
 - **Sonido:** pasar también el sonido a la TV, y devolverlo después.
-- **Combo del mando** (desactivado por defecto): mantener botones de un mando
-  tipo Xbox 1,5 s para cambiar. Tocá **Grabar** y mantenelos, por ejemplo los
-  dos sticks (`LS+RS`). Evitá Back, Start y Home: los mandos los usan para sus
+- **Combo del mando** (desactivado por defecto): uno o varios botones juntos
+  para cambiar, desde un toque rápido hasta mantenerlos 5 s (1,5 s por
+  defecto). Tocá **Grabar**, apretalos y soltalos, por ejemplo los dos sticks
+  (`LS+RS`). Evitá Back, Start y Home: los mandos los usan para sus
   propios atajos (un GameSir Nova Lite cambia de modo con Back+Start+LB).
 - Que el atajo y el combo del mando también abran Big Picture.
 - Si salir de Big Picture sin cerrarlo vuelve al escritorio.
@@ -71,7 +72,7 @@ Clic derecho en el ícono → **Ajustes…**
 
 ## Menú TV
 
-Un toque al botón **Share/View** del mando (o el atajo de teclado) abre el **Menú TV** en la TV, desde cualquier lado: el escritorio, Big Picture o un juego. Tiene mosaicos grandes para YouTube, Crunchyroll, Big Picture y el escritorio. También se abre desde el ícono junto al reloj. El botón se puede cambiar (o apagar) en Ajustes > Opciones avanzadas > Menú TV.
+Un toque al botón **Share/View** del mando (o el atajo de teclado) abre el **Menú TV** en la TV, desde cualquier lado: el escritorio, Big Picture o un juego. Tiene mosaicos grandes para YouTube, Crunchyroll, Big Picture y el escritorio. También se abre desde el ícono junto al reloj. Los botones (uno o varios, con un toque o mantenidos hasta 5 s) se pueden cambiar (o apagar) en Ajustes > Opciones avanzadas > Menú TV.
 
 - **En el menú**: cruceta o stick izquierdo para moverte, A para abrir, B para volver.
 - **Como en una consola**: volver al menú no cierra la app. Queda abierta detrás, el mosaico dice "Abierta", A vuelve a ella y X la cierra. Puede haber varias abiertas a la vez (por ejemplo música mientras jugás). Si vas al escritorio, se minimizan.

@@ -154,12 +154,62 @@ public class TvMenuTests
     [InlineData(" share ", GamepadButtons.Back)]
     [InlineData("Options", GamepadButtons.Start)]
     [InlineData("L3", GamepadButtons.LS)]
-    [InlineData("", GamepadButtons.None)]
-    [InlineData("A", GamepadButtons.None)]
-    public void MenuButtonNames(string text, GamepadButtons expected) => Assert.Equal(expected, TapDetector.Parse(text));
+    [InlineData("A", GamepadButtons.A)]
+    [InlineData("Share+R1", GamepadButtons.Back | GamepadButtons.RB)]
+    public void MenuButtonNames(string text, GamepadButtons expected) => Assert.Equal(expected, GamepadCombo.ParseAny(text));
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("Back+Nope")]
+    public void UnknownMenuButtonsAreNone(string text) => Assert.Null(GamepadCombo.ParseAny(text));
 
     [Fact]
-    public void ShareOpensTheMenuByDefault() => Assert.Equal(GamepadButtons.Back, TapDetector.Parse(new AppSettings().ControllerMenuButton));
+    public void ShareOpensTheMenuByDefault()
+    {
+        var settings = new AppSettings();
+        Assert.Equal(GamepadButtons.Back, GamepadCombo.ParseAny(settings.ControllerMenuButton));
+        Assert.Equal(0, settings.ControllerMenuHold);
+    }
+
+    [Fact]
+    public void SeveralButtonsTappedTogetherCount()
+    {
+        var tap = new TapDetector();
+        var chord = GamepadButtons.LB | GamepadButtons.RB;
+        tap.Update(chord, GamepadButtons.LB, T0);
+        tap.Update(chord, chord, T0.AddMilliseconds(80));
+        tap.Update(chord, GamepadButtons.RB, T0.AddMilliseconds(250));
+        Assert.True(tap.Update(chord, GamepadButtons.None, T0.AddMilliseconds(300)));
+    }
+
+    [Fact]
+    public void ABindingWithNoHoldIsATap()
+    {
+        var d = new BindingDetector();
+        Assert.False(d.Update(GamepadButtons.Back, 0, GamepadButtons.Back, T0));
+        Assert.False(d.Update(GamepadButtons.Back, 0, GamepadButtons.Back, T0.AddMilliseconds(150)));
+        Assert.True(d.Update(GamepadButtons.Back, 0, GamepadButtons.None, T0.AddMilliseconds(200)));
+    }
+
+    [Fact]
+    public void ABindingWithAHoldFiresOnceAfterThatTime()
+    {
+        var d = new BindingDetector();
+        var combo = GamepadButtons.Back | GamepadButtons.Down;
+        Assert.False(d.Update(combo, 3, combo, T0));
+        Assert.False(d.Update(combo, 3, combo, T0.AddSeconds(2.9)));
+        Assert.True(d.Update(combo, 3, combo, T0.AddSeconds(3)));
+        Assert.False(d.Update(combo, 3, combo, T0.AddSeconds(4)));
+        Assert.False(d.Update(combo, 3, GamepadButtons.None, T0.AddSeconds(4.1))); // no tap on release
+    }
+
+    [Fact]
+    public void AnEmptyBindingNeverFires()
+    {
+        var d = new BindingDetector();
+        Assert.False(d.Update(GamepadButtons.None, 0, GamepadButtons.Back, T0));
+        Assert.False(d.Update(GamepadButtons.None, 0, GamepadButtons.None, T0.AddMilliseconds(100)));
+    }
 
     [Fact]
     public void TileKeysTellTilesApart()

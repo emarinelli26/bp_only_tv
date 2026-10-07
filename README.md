@@ -57,9 +57,9 @@ Right-click the icon → **Settings…**
 **Advanced options:**
 
 - **Sound:** move the sound to the TV too, and back afterwards.
-- **Controller combo** (off by default): hold buttons on an Xbox-style
-  controller for 1.5 s to switch. Press **Record** and hold them, for example
-  both sticks (`LS+RS`). Avoid Back, Start and Home: controllers use those for
+- **Controller combo** (off by default): one button or several pressed together
+  to switch, held from a quick tap up to 5 s (1.5 s by default). Press
+  **Record**, press them and let go, for example both sticks (`LS+RS`). Avoid Back, Start and Home: controllers use those for
   their own shortcuts (a GameSir Nova Lite changes mode with Back+Start+LB).
 - Make the shortcut and the controller combo open Big Picture as well.
 - Whether stepping away from Big Picture goes back to the desktop.
@@ -69,7 +69,7 @@ Right-click the icon → **Settings…**
 
 ## TV menu
 
-A tap on the controller's **Share/View** button (or the keyboard shortcut) opens the **TV menu** on the TV from anywhere: big tiles for YouTube, Crunchyroll, Big Picture and the desktop. The tray icon opens it too, and the button can be changed or turned off in Settings. Like on a console, going back to the menu leaves the app running: its tile says "Open", A goes back to it and X closes it. Web tiles open full screen in Microsoft Edge with a profile of their own, and the app drives the page directly (cross = arrows, A = Enter, B = back, Start = pause). Xbox, PlayStation and Switch controllers work. To open it from Big Picture, add `BigPictureTV.exe` as a non-Steam game with `--menu` as its launch option, and give it the Gamepad controller template. Tiles live in `TvMenuApps` in `settings.json`; [README.es.md](README.es.md#menú-tv) describes the fields.
+A tap on the controller's **Share/View** button (or the keyboard shortcut) opens the **TV menu** on the TV from anywhere: big tiles for YouTube, Crunchyroll, Big Picture and the desktop. The tray icon opens it too, and the buttons (one or several, tapped or held up to 5 s) can be changed or turned off in Settings. Like on a console, going back to the menu leaves the app running: its tile says "Open", A goes back to it and X closes it. Web tiles open full screen in Microsoft Edge with a profile of their own, and the app drives the page directly (cross = arrows, A = Enter, B = back, Start = pause). Xbox, PlayStation and Switch controllers work. To open it from Big Picture, add `BigPictureTV.exe` as a non-Steam game with `--menu` as its launch option, and give it the Gamepad controller template. Tiles live in `TvMenuApps` in `settings.json`; [README.es.md](README.es.md#menú-tv) describes the fields.
 
 ## Stuck on the TV?
 

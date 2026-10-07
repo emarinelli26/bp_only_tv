@@ -23,7 +23,7 @@ public enum PadAction
 /// <summary>
 /// Turns controller states, read many times a second, into actions: one per
 /// press, and directions repeat while held, like a keyboard. View (Back) is
-/// left out: it opens the menu (see <see cref="TapDetector"/>). Not thread-safe;
+/// left out: it opens the menu (see <see cref="Input.BindingDetector"/>). Not thread-safe;
 /// feed it from one thread.
 /// </summary>
 public sealed class PadMapper
