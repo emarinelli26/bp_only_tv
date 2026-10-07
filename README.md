@@ -69,7 +69,7 @@ Right-click the icon → **Settings…**
 
 ## TV menu
 
-The keyboard shortcut (or the controller combo, if on) opens the **TV menu** on the TV: big tiles for YouTube, Crunchyroll, Big Picture and the desktop. The tray icon opens it too. Web tiles open full screen in Microsoft Edge with a profile of their own, and the controller types keys (cross = arrows, A = Enter, B = back, Start = pause). Hold View (Back) for a second to come back to the menu. To open it from Big Picture, add `BigPictureTV.exe` as a non-Steam game with `--menu` as its launch option, and give it the Gamepad controller template. Tiles live in `TvMenuApps` in `settings.json`; [README.es.md](README.es.md#menú-tv) describes the fields.
+A tap on the controller's **Share/View** button (or the keyboard shortcut) opens the **TV menu** on the TV from anywhere: big tiles for YouTube, Crunchyroll, Big Picture and the desktop. The tray icon opens it too, and the button can be changed or turned off in Settings. Like on a console, going back to the menu leaves the app running: its tile says "Open", A goes back to it and X closes it. Web tiles open full screen in Microsoft Edge with a profile of their own, and the app drives the page directly (cross = arrows, A = Enter, B = back, Start = pause). Xbox, PlayStation and Switch controllers work. To open it from Big Picture, add `BigPictureTV.exe` as a non-Steam game with `--menu` as its launch option, and give it the Gamepad controller template. Tiles live in `TvMenuApps` in `settings.json`; [README.es.md](README.es.md#menú-tv) describes the fields.
 
 ## Stuck on the TV?
 

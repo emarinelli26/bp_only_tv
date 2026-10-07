@@ -75,6 +75,13 @@ public sealed class AppSettings
     /// </summary>
     public bool ShortcutOpensTvMenu { get; set; } = true;
 
+    /// <summary>
+    /// Controller button that, tapped on its own, opens and closes the TV
+    /// menu from anywhere: "Back" (View on Xbox, Share on PlayStation, the
+    /// default), "Start", "LS", "RS", or empty for none.
+    /// </summary>
+    public string ControllerMenuButton { get; set; } = "Back";
+
     /// <summary>Tiles of the TV menu, in order.</summary>
     public List<TvApp> TvMenuApps { get; set; } = TvApp.Defaults();
 

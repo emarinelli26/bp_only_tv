@@ -33,7 +33,7 @@ public sealed class SettingsWindow : Window
     readonly RadioButton _tvOnly, _tvPrimary, _duplicate;
     readonly TextBox _grace, _extra;
     readonly CheckBox _startup, _desktopWhenHidden, _rumble, _switchAudio, _shortcutOpensBp, _shortcutOpensMenu, _checkUpdates;
-    readonly ComboBox _audioDevice;
+    readonly ComboBox _audioDevice, _menuButton;
     readonly Expander _advanced;
     readonly IReadOnlyList<AudioDevice> _audioOutputs;
     readonly TextBlock _testMessage;
@@ -205,6 +205,15 @@ public sealed class SettingsWindow : Window
             IsChecked = _draft.ShortcutOpensTvMenu,
         };
         advanced.Children.Add(_shortcutOpensMenu);
+        var menuButtonRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
+        menuButtonRow.Children.Add(new TextBlock { Text = S.MenuButtonLabel, VerticalAlignment = VerticalAlignment.Center });
+        _menuButton = new ComboBox { Margin = new Thickness(8, 0, 0, 0), MinWidth = 160 };
+        _menuButton.Items.Add(S.MenuButtonNone);
+        foreach (var choice in TapDetector.Choices) _menuButton.Items.Add(TrayApp.MenuButtonName(choice));
+        int menuIndex = Array.IndexOf(TapDetector.Choices, TapDetector.Parse(_draft.ControllerMenuButton));
+        _menuButton.SelectedIndex = menuIndex + 1; // -1 (none) becomes 0
+        menuButtonRow.Children.Add(_menuButton);
+        advanced.Children.Add(menuButtonRow);
 
         advanced.Children.Add(Heading(S.OpenBigPictureGroup));
         _shortcutOpensBp = new CheckBox
@@ -380,6 +389,7 @@ public sealed class SettingsWindow : Window
         _draft.AudioDeviceId = (_audioDevice.SelectedItem as AudioDevice)?.Id ?? "";
         _draft.ShortcutOpensBigPicture = _shortcutOpensBp.IsChecked == true;
         _draft.ShortcutOpensTvMenu = _shortcutOpensMenu.IsChecked == true;
+        _draft.ControllerMenuButton = _menuButton.SelectedIndex > 0 ? GamepadCombo.Format(TapDetector.Choices[_menuButton.SelectedIndex - 1]) : "";
         _draft.CheckForUpdates = _checkUpdates.IsChecked == true;
         _draft.ControllerCombo = _combo == GamepadButtons.None ? "" : GamepadCombo.Format(_combo);
         _draft.DesktopWhenBigPictureHidden = _desktopWhenHidden.IsChecked == true;

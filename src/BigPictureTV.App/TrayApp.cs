@@ -78,9 +78,10 @@ public sealed class TrayApp : IDisposable
         ApplyHotkey();
 
         var ui = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
-        _gamepad = new GamepadService(log, () => ui.Post(_ => OnToggleShortcut(), null));
+        _gamepad = new GamepadService(log, () => ui.Post(_ => OnToggleShortcut(), null), () => ui.Post(_ => OnMenuButton(), null));
         ApplyCombo();
-        _tvMenu = new TvSession(log, _gamepad, ui, EnterTvForMenu, LeaveTvFromMenu, OpenBigPicture);
+        _tvMenu = new TvSession(log, _gamepad, ui, EnterTvForMenu, LeaveTvFromMenu, OpenBigPicture,
+            () => MenuButtonName(TapDetector.Parse(_settings.ControllerMenuButton)));
         BuildMenu();
         WriteMenuTilesOnce();
 
@@ -116,6 +117,7 @@ public sealed class TrayApp : IDisposable
         // records it instead of switching displays.
         _hotkeys.SetToggle(null);
         _gamepad.Combo = GamepadButtons.None;
+        _gamepad.MenuButton = GamepadButtons.None;
         try
         {
             var result = WpfDialogs.ShowSettings(_settings, _display.ListDisplays(), firstRun,
@@ -173,11 +175,32 @@ public sealed class TrayApp : IDisposable
     void ApplyCombo()
     {
         _gamepad.Rumble = _settings.ControllerRumble;
+        var menuButton = TapDetector.Parse(_settings.ControllerMenuButton);
+        if (menuButton != _gamepad.MenuButton)
+        {
+            _gamepad.MenuButton = menuButton;
+            _log.Write(menuButton == GamepadButtons.None ? "Controller menu button off." : $"Controller menu button: {GamepadCombo.Format(menuButton)}.");
+        }
         var combo = GamepadCombo.Parse(_settings.ControllerCombo) ?? GamepadButtons.None;
         if (combo == _gamepad.Combo) return;
         _gamepad.Combo = combo;
         _log.Write(combo == GamepadButtons.None ? "Controller combo off." : $"Controller combo: {GamepadCombo.Format(combo)}.");
     }
+
+    void OnMenuButton()
+    {
+        if (_testing || WpfDialogs.SettingsOpen) return;
+        _tvMenu.Toggle();
+    }
+
+    internal static string MenuButtonName(GamepadButtons button) => button switch
+    {
+        GamepadButtons.Back => S.MenuButtonBack,
+        GamepadButtons.Start => S.MenuButtonStart,
+        GamepadButtons.LS => S.MenuButtonLS,
+        GamepadButtons.RS => S.MenuButtonRS,
+        _ => "",
+    };
 
     // Switching displays takes a moment; a second press in the meantime
     // (or right after) would undo the first.

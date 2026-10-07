@@ -71,13 +71,13 @@ Clic derecho en el ícono → **Ajustes…**
 
 ## Menú TV
 
-El atajo de teclado (o el combo del mando, si lo activaste) abre el **Menú TV** en la TV: mosaicos grandes para YouTube, Crunchyroll, Big Picture y el escritorio. También se abre desde el ícono junto al reloj.
+Un toque al botón **Share/View** del mando (o el atajo de teclado) abre el **Menú TV** en la TV, desde cualquier lado: el escritorio, Big Picture o un juego. Tiene mosaicos grandes para YouTube, Crunchyroll, Big Picture y el escritorio. También se abre desde el ícono junto al reloj. El botón se puede cambiar (o apagar) en Ajustes > Opciones avanzadas > Menú TV.
 
-- **En el menú**: cruceta o stick izquierdo para moverte, A para abrir, B para cerrar.
-- **En una página**: se abre en Microsoft Edge a pantalla completa, con un perfil propio por mosaico (las sesiones quedan guardadas y no se mezclan con tu Edge). El mando escribe teclas: cruceta = flechas, A = Enter, B = volver, Start = pausa, LB/RB = elemento anterior/siguiente, LT/RT = subir/bajar página.
-- **Volver al menú**: mantené View (Back) un segundo.
+- **En el menú**: cruceta o stick izquierdo para moverte, A para abrir, B para volver.
+- **Como en una consola**: volver al menú no cierra la app. Queda abierta detrás, el mosaico dice "Abierta", A vuelve a ella y X la cierra. Puede haber varias abiertas a la vez (por ejemplo música mientras jugás). Si vas al escritorio, se minimizan.
+- **En una página**: se abre en Microsoft Edge a pantalla completa, con un perfil propio por mosaico (las sesiones quedan guardadas y no se mezclan con tu Edge). La app controla la página directamente: cruceta = flechas, A = Enter, B = volver, Start = pausa, LB/RB = elemento anterior/siguiente, LT/RT = subir/bajar página.
 - **YouTube** usa su interfaz de TV (youtube.com/tv), que ya se maneja con el mando y trae su teclado.
-- **Mandos**: Xbox, PlayStation (DualShock 4, DualSense), Switch y otros. En PlayStation, View es Share (o el clic del panel táctil).
+- **Mandos**: Xbox, PlayStation (DualShock 4, DualSense), Switch y otros.
 
 ### Desde Big Picture
 

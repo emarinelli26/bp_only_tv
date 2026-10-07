@@ -41,16 +41,6 @@ static class WpfDialogs
 
     public static void ShowTestCountdown() => new TestDialog().ShowDialog();
 
-    /// <summary>
-    /// Shows the TV menu and waits. <paramref name="opened"/> gets a way to
-    /// feed it controller actions and to close it, both safe from any thread.
-    /// </summary>
-    public static (TvApp? Chosen, int Selected) ShowTvMenu(IReadOnlyList<TvApp> apps, int selected, string? message,
-        Action<Action<PadAction>, Action> opened)
-    {
-        var window = new TvMenuWindow(apps, selected, message);
-        opened(window.Handle, () => window.Dispatcher.BeginInvoke(window.Close));
-        window.ShowDialog();
-        return (window.Chosen, window.Selected);
-    }
+    /// <summary>The TV menu, made once and kept (hidden) for the rest of the run.</summary>
+    public static ITvMenuView CreateTvMenu() => new TvMenuWindow();
 }

@@ -111,18 +111,76 @@ public class TvMenuTests
     }
 
     [Fact]
-    public void HoldingViewClosesTheAppOnce()
+    public void XClosesAndViewIsLeftToTheMenuButton()
     {
         var mapper = new PadMapper();
-        Assert.Empty(mapper.Update(GamepadButtons.Back, T0));
-        Assert.Empty(mapper.Update(GamepadButtons.Back, T0 + PadMapper.CloseHold - TimeSpan.FromMilliseconds(1)));
-        Assert.Equal(new[] { PadAction.Close }, mapper.Update(GamepadButtons.Back, T0 + PadMapper.CloseHold));
-        Assert.Empty(mapper.Update(GamepadButtons.Back, T0 + TimeSpan.FromSeconds(5)));
-        Assert.Empty(mapper.Update(GamepadButtons.None, T0 + TimeSpan.FromSeconds(6)));
+        Assert.Equal(new[] { PadAction.Option }, mapper.Update(GamepadButtons.X, T0));
+        Assert.Empty(mapper.Update(GamepadButtons.Back, T0.AddSeconds(1)));
+        Assert.Empty(mapper.Update(GamepadButtons.Back, T0.AddSeconds(5)));
+    }
 
-        // View together with other buttons (a combo) never closes.
-        Assert.Empty(mapper.Update(GamepadButtons.Back | GamepadButtons.Start, T0 + TimeSpan.FromSeconds(7)));
-        Assert.Empty(mapper.Update(GamepadButtons.Back | GamepadButtons.Start, T0 + TimeSpan.FromSeconds(9)));
+    [Fact]
+    public void ATapOfTheMenuButtonFiresOnRelease()
+    {
+        var tap = new TapDetector();
+        Assert.False(tap.Update(GamepadButtons.Back, GamepadButtons.Back, T0));
+        Assert.True(tap.Update(GamepadButtons.Back, GamepadButtons.None, T0.AddMilliseconds(200)));
+        Assert.False(tap.Update(GamepadButtons.Back, GamepadButtons.None, T0.AddMilliseconds(300))); // once
+    }
+
+    [Fact]
+    public void HoldsAndCombosAreNotTaps()
+    {
+        var tap = new TapDetector();
+        tap.Update(GamepadButtons.Back, GamepadButtons.Back, T0);
+        Assert.False(tap.Update(GamepadButtons.Back, GamepadButtons.None, T0 + TapDetector.MaxTap + TimeSpan.FromMilliseconds(1)));
+
+        // Back+Start (a combo), let go in any order.
+        tap.Update(GamepadButtons.Back, GamepadButtons.Back, T0.AddSeconds(2));
+        tap.Update(GamepadButtons.Back, GamepadButtons.Back | GamepadButtons.Start, T0.AddSeconds(2.1));
+        tap.Update(GamepadButtons.Back, GamepadButtons.Back, T0.AddSeconds(2.2));
+        Assert.False(tap.Update(GamepadButtons.Back, GamepadButtons.None, T0.AddSeconds(2.3)));
+
+        // Pressed while another button was already down.
+        tap.Update(GamepadButtons.Back, GamepadButtons.A | GamepadButtons.Back, T0.AddSeconds(3));
+        Assert.False(tap.Update(GamepadButtons.Back, GamepadButtons.A, T0.AddSeconds(3.1)));
+
+        // Off.
+        Assert.False(tap.Update(GamepadButtons.None, GamepadButtons.None, T0.AddSeconds(4)));
+    }
+
+    [Theory]
+    [InlineData("Back", GamepadButtons.Back)]
+    [InlineData(" share ", GamepadButtons.Back)]
+    [InlineData("Options", GamepadButtons.Start)]
+    [InlineData("L3", GamepadButtons.LS)]
+    [InlineData("", GamepadButtons.None)]
+    [InlineData("A", GamepadButtons.None)]
+    public void MenuButtonNames(string text, GamepadButtons expected) => Assert.Equal(expected, TapDetector.Parse(text));
+
+    [Fact]
+    public void ShareOpensTheMenuByDefault() => Assert.Equal(GamepadButtons.Back, TapDetector.Parse(new AppSettings().ControllerMenuButton));
+
+    [Fact]
+    public void TileKeysTellTilesApart()
+    {
+        var apps = TvApp.Defaults();
+        Assert.Equal(apps.Count, apps.Select(a => a.Key).Distinct().Count());
+        Assert.Equal(apps[0].Key, AppSettingsRoundTrip(apps)[0].Key);
+    }
+
+    static List<TvApp> AppSettingsRoundTrip(List<TvApp> apps)
+    {
+        var file = Path.Combine(Path.GetTempPath(), $"bptv-{Guid.NewGuid():N}.json");
+        try
+        {
+            new AppSettings { TvMenuApps = apps }.Save(file);
+            return AppSettings.Load(file).TvMenuApps;
+        }
+        finally
+        {
+            File.Delete(file);
+        }
     }
 
     [Theory]

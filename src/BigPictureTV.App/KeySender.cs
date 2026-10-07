@@ -64,16 +64,26 @@ static class KeySender
     }
 
     /// <summary>
-    /// Brings a window of ours to the front even when the user last touched
-    /// another program (a controller press is no keyboard input for Windows).
+    /// Brings a window to the front even when the user last touched another
+    /// program (a controller press is no keyboard input for Windows): joining
+    /// the input of the window in front for a moment lifts that restriction.
     /// </summary>
     public static void ForceForeground(IntPtr window)
     {
-        if (GetForegroundWindow() == window) return;
-        // Windows lets the program that got the last key press pick the front
-        // window: a lone Alt press makes that us, without side effects.
-        SendInput(2, new[] { Key(0x12, up: false), Key(0x12, up: true) }, Marshal.SizeOf<INPUT>());
-        SetForegroundWindow(window);
+        var front = GetForegroundWindow();
+        if (front == window) return;
+        uint ours = GetCurrentThreadId();
+        uint theirs = front == IntPtr.Zero ? 0 : GetWindowThreadProcessId(front, out _);
+        bool joined = theirs != 0 && theirs != ours && AttachThreadInput(ours, theirs, true);
+        try
+        {
+            BringWindowToTop(window);
+            SetForegroundWindow(window);
+        }
+        finally
+        {
+            if (joined) AttachThreadInput(ours, theirs, false);
+        }
     }
 
     static INPUT Key(uint vk, bool up) => new()
@@ -129,4 +139,13 @@ static class KeySender
 
     [DllImport("user32.dll")]
     static extern bool SetForegroundWindow(IntPtr window);
+
+    [DllImport("user32.dll")]
+    static extern bool BringWindowToTop(IntPtr window);
+
+    [DllImport("user32.dll")]
+    static extern bool AttachThreadInput(uint attach, uint attachTo, bool join);
+
+    [DllImport("kernel32.dll")]
+    static extern uint GetCurrentThreadId();
 }

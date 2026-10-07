@@ -58,6 +58,10 @@ public sealed class TvApp
     /// <summary>Tile color as #RRGGBB. Empty: one from the menu's palette.</summary>
     public string Color { get; set; } = "";
 
+    /// <summary>Tells tiles apart, to know which ones are open.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string Key => $"{Kind}|{Name.Trim()}|{Target.Trim()}";
+
     public override string ToString() => Name.Length > 0 ? Name : Kind.ToString();
 
     public static List<TvApp> Defaults() => new()

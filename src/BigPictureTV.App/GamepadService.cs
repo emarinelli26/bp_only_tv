@@ -24,6 +24,8 @@ sealed class GamepadService : IDisposable
 
     readonly ILog _log;
     readonly Action _onCombo;
+    readonly Action _onMenuButton;
+    readonly Dictionary<int, TapDetector> _taps = new();
     readonly Thread _thread;
     readonly ManualResetEventSlim _stop = new();
     readonly Dictionary<int, ComboDetector> _detectors = new();
@@ -35,6 +37,9 @@ sealed class GamepadService : IDisposable
 
     /// <summary>The combo to look for; None turns it off. Safe to set from any thread.</summary>
     public GamepadButtons Combo { get; set; }
+
+    /// <summary>Button whose tap opens the TV menu; None turns it off. Safe to set from any thread.</summary>
+    public GamepadButtons MenuButton { get; set; }
 
     /// <summary>Buzz the controller when the combo fires. Safe to set from any thread.</summary>
     public bool Rumble { get; set; }
@@ -50,10 +55,12 @@ sealed class GamepadService : IDisposable
     public GamepadButtons? Pressed => _pressed < 0 ? null : (GamepadButtons)_pressed;
 
     /// <param name="onCombo">Called on the watcher thread; hand it to the UI thread.</param>
-    public GamepadService(ILog log, Action onCombo)
+    /// <param name="onMenuButton">Called on the watcher thread when the menu button is tapped.</param>
+    public GamepadService(ILog log, Action onCombo, Action onMenuButton)
     {
         _log = log;
         _onCombo = onCombo;
+        _onMenuButton = onMenuButton;
         _thread = new Thread(Run) { IsBackground = true, Name = "Controller", Priority = ThreadPriority.BelowNormal };
         _thread.Start();
     }
@@ -72,20 +79,35 @@ sealed class GamepadService : IDisposable
 
                 int pressed = -1;
                 var stick = GamepadButtons.None;
-                foreach (var (id, buttons, pushed) in _sdl != null ? _sdl.Read(probe) : ReadXInput(probe))
+                try
                 {
-                    pressed = (pressed < 0 ? 0 : pressed) | (int)buttons;
-                    stick |= pushed;
-                    if (!_detectors.TryGetValue(id, out var detector)) _detectors[id] = detector = new ComboDetector();
-                    if (detector.Update(Combo, buttons, now))
+                    foreach (var (id, buttons, pushed) in _sdl != null ? _sdl.Read(probe) : ReadXInput(probe))
                     {
-                        _log.Write($"Controller {id}: {GamepadCombo.Format(Combo)} held.");
-                        if (Rumble) Buzz(id);
-                        _onCombo();
+                        pressed = (pressed < 0 ? 0 : pressed) | (int)buttons;
+                        stick |= pushed;
+                        if (!_detectors.TryGetValue(id, out var detector)) _detectors[id] = detector = new ComboDetector();
+                        if (detector.Update(Combo, buttons, now))
+                        {
+                            _log.Write($"Controller {id}: {GamepadCombo.Format(Combo)} held.");
+                            if (Rumble) Buzz(id);
+                            _onCombo();
+                        }
+                        if (!_taps.TryGetValue(id, out var tap)) _taps[id] = tap = new TapDetector();
+                        if (tap.Update(MenuButton, buttons, now))
+                        {
+                            _log.Write($"Controller {id}: {GamepadCombo.Format(MenuButton)} tapped.");
+                            _onMenuButton();
+                        }
                     }
+                    _pressed = pressed;
+                    if (pressed >= 0) Listener?.Invoke((GamepadButtons)pressed | stick);
                 }
-                _pressed = pressed;
-                if (pressed >= 0) Listener?.Invoke((GamepadButtons)pressed | stick);
+                catch (Exception e)
+                {
+                    // Never let a controller hiccup take the whole app down.
+                    _log.Write($"Controller watcher error: {e}");
+                    _stop.Wait(ProbeEvery);
+                }
                 _stop.Wait(pressed < 0 ? ProbeEvery : PollEvery);
             }
         }
