@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using BigPictureTV.Core;
 using BigPictureTV.Core.Input;
 using BigPictureTV.Core.TvMenu;
@@ -40,6 +42,9 @@ sealed class TvSession : IDisposable
     Process? _process;
     DateTime _startedAt;
     string _browserName = "";
+    string? _profile;  // the open web tile's browser profile
+    volatile int _launches; // tells a late browser lookup it is out of date
+    volatile bool _keysLogged;
 
     /// <param name="enterTv">Switches to the TV unless already there; Switched is true if it did.</param>
     public TvSession(ILog log, GamepadService gamepad, SynchronizationContext ui,
@@ -123,8 +128,12 @@ sealed class TvSession : IDisposable
                 }
                 string profile = BrowserCommand.ProfileDir(AppPaths.DataDir, app);
                 Directory.CreateDirectory(profile);
-                start = new ProcessStartInfo(browser, BrowserCommand.Arguments(app, profile)) { UseShellExecute = false };
                 _browserName = Path.GetFileNameWithoutExtension(browser);
+                // One window per tile: a copy left from before would take the
+                // new page as a second window (and ignore its settings).
+                BrowserProcesses.Close(_browserName, profile, _log);
+                start = new ProcessStartInfo(browser, BrowserCommand.Arguments(app, profile)) { UseShellExecute = false };
+                _profile = profile;
             }
             else
             {
@@ -134,14 +143,11 @@ sealed class TvSession : IDisposable
             }
 
             _app = app;
+            _keysLogged = false;
             _startedAt = DateTime.UtcNow;
             _process = Process.Start(start);
-            if (_process != null)
-            {
-                var started = _process;
-                started.EnableRaisingEvents = true;
-                started.Exited += (_, _) => _ui.Post(_ => OnExited(started), null);
-            }
+            if (_process != null) Follow(_process);
+            if (app.Kind == TvAppKind.Web) FindBrowser(++_launches, _browserName, _profile!);
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException or UnauthorizedAccessException)
         {
@@ -151,6 +157,49 @@ sealed class TvSession : IDisposable
             ShowMenu(string.Format(S.TvMenuOpenFailed, app));
         }
     }
+
+    void Follow(Process process)
+    {
+        process.EnableRaisingEvents = true;
+        process.Exited += (_, _) => _ui.Post(_ => OnExited(process), null);
+    }
+
+    // The browser we start may hand over to another process and quit; find
+    // the one that really shows the page, so its closing brings the menu
+    // back and View (Back) can close it.
+    void FindBrowser(int launch, string browserName, string profile) => Task.Run(() =>
+    {
+        for (int i = 0; i < 30 && launch == _launches; i++)
+        {
+            var found = BrowserProcesses.Find(browserName, profile, _log);
+            if (found.Count > 0)
+            {
+                _ui.Post(_ =>
+                {
+                    if (launch != _launches || _app == null || found[0].HasExited)
+                    {
+                        found.ForEach(p => p.Dispose());
+                        return;
+                    }
+                    if (_process?.Id != found[0].Id)
+                    {
+                        _process?.Dispose();
+                        _process = found[0];
+                        Follow(_process);
+                    }
+                    else
+                    {
+                        found[0].Dispose();
+                    }
+                    foreach (var extra in found.Skip(1)) extra.Dispose();
+                    _log.Write($"Following the browser (process {_process.Id}).");
+                }, null);
+                return;
+            }
+            Thread.Sleep(500);
+        }
+        if (launch == _launches) _log.Write("The browser window wasn't found; hold View (Back) to come back to the menu.");
+    });
 
     void OnExited(Process process)
     {
@@ -176,6 +225,7 @@ sealed class TvSession : IDisposable
         var process = _process;
         _process = null;
         _app = null;
+        _launches++;
         if (process != null)
         {
             try
@@ -189,6 +239,11 @@ sealed class TvSession : IDisposable
                 _log.Write($"Closing the app failed: {e.Message}");
             }
             process.Dispose();
+        }
+        if (_profile != null)
+        {
+            BrowserProcesses.Close(_browserName, _profile, _log); // anything left on that profile
+            _profile = null;
         }
         if (showMenu && _active) ShowMenu();
     }
@@ -227,8 +282,18 @@ sealed class TvSession : IDisposable
             }
             // Only web pages get keys, and only while their window is in
             // front: other programs read the controller themselves.
-            if (app.Kind != TvAppKind.Web || KeySender.ForegroundProcessName() != _browserName) continue;
-            if (KeysFor(action, app) is { } keys) KeySender.Send(keys);
+            if (app.Kind != TvAppKind.Web) continue;
+            string front = KeySender.ForegroundProcessName();
+            if (!string.Equals(front, _browserName, StringComparison.OrdinalIgnoreCase))
+            {
+                if (!_keysLogged) _log.Write($"Controller keys not sent: \"{front}\" is in front, not {_browserName}.");
+                _keysLogged = true;
+                continue;
+            }
+            if (KeysFor(action, app) is not { } keys) continue;
+            KeySender.Send(keys);
+            if (!_keysLogged) _log.Write($"Controller keys go to {_browserName} (first: {keys}).");
+            _keysLogged = true;
         }
     }
 

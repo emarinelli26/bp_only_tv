@@ -77,6 +77,7 @@ El atajo de teclado (o el combo del mando, si lo activaste) abre el **Menú TV**
 - **En una página**: se abre en Microsoft Edge a pantalla completa, con un perfil propio por mosaico (las sesiones quedan guardadas y no se mezclan con tu Edge). El mando escribe teclas: cruceta = flechas, A = Enter, B = volver, Start = pausa, LB/RB = elemento anterior/siguiente, LT/RT = subir/bajar página.
 - **Volver al menú**: mantené View (Back) un segundo.
 - **YouTube** usa su interfaz de TV (youtube.com/tv), que ya se maneja con el mando y trae su teclado.
+- **Mandos**: Xbox, PlayStation (DualShock 4, DualSense), Switch y otros. En PlayStation, View es Share (o el clic del panel táctil).
 
 ### Desde Big Picture
 

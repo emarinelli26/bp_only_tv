@@ -107,7 +107,10 @@ public sealed class AppSettings
         if (!File.Exists(file)) return new AppSettings();
         try
         {
-            return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(file), JsonOptions) ?? new AppSettings();
+            var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(file), JsonOptions) ?? new AppSettings();
+            settings.TvMenuApps ??= TvApp.Defaults();
+            TvApp.UpdateUserAgents(settings.TvMenuApps);
+            return settings;
         }
         catch (Exception e) when (e is JsonException or IOException)
         {

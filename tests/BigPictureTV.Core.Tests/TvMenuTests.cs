@@ -142,4 +142,37 @@ public class TvMenuTests
 
     [Fact]
     public void ShortcutsStillNeedAModifier() => Assert.Null(Hotkey.Parse("Esc"));
+    [Fact]
+    public void OldYouTubeUserAgentIsReplacedOnLoad()
+    {
+        var file = Path.Combine(Path.GetTempPath(), $"bptv-{Guid.NewGuid():N}.json");
+        try
+        {
+            const string tizen = "Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) AppleWebKit/537.36 (KHTML, like Gecko) 76.0.3809.146/6.0 TV Safari/537.36";
+            var settings = new AppSettings();
+            settings.TvMenuApps[0].UserAgent = tizen;
+            settings.TvMenuApps[1].UserAgent = "Custom/1.0";
+            settings.Save(file);
+            var loaded = AppSettings.Load(file);
+            Assert.Equal(TvApp.SmartTvUserAgent, loaded.TvMenuApps[0].UserAgent);
+            Assert.Equal("Custom/1.0", loaded.TvMenuApps[1].UserAgent); // the user's own choice stays
+
+            File.WriteAllText(file, "{ \"TvMenuApps\": null }");
+            Assert.Equal(4, AppSettings.Load(file).TvMenuApps.Count);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [Theory]
+    [InlineData("\"C:\\Edge\\msedge.exe\" \"--user-data-dir=C:\\D\\Browser\\youtube\" --no-first-run \"--app=https://www.youtube.com/tv\"", true)]
+    [InlineData("C:\\Edge\\msedge.exe --user-data-dir=c:\\d\\browser\\YOUTUBE --flag", true)]
+    [InlineData("\"C:\\Edge\\msedge.exe\" --type=renderer \"--user-data-dir=C:\\D\\Browser\\youtube\"", false)]
+    [InlineData("\"C:\\Edge\\msedge.exe\" \"--user-data-dir=C:\\D\\Browser\\youtube2\"", false)]
+    [InlineData("\"C:\\Edge\\msedge.exe\" --profile-directory=Default", false)]
+    [InlineData(null, false)]
+    public void FindsTheBrowserStartedForATile(string? commandLine, bool expected) =>
+        Assert.Equal(expected, BrowserCommand.IsMainProcessFor(commandLine, "C:\\D\\Browser\\youtube"));
 }

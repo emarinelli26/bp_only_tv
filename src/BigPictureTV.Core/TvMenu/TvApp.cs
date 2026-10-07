@@ -18,9 +18,22 @@ public enum TvAppKind
 /// <summary>One tile of the TV menu, stored in settings.json.</summary>
 public sealed class TvApp
 {
-    // What YouTube's TV interface (youtube.com/tv) expects; a desktop browser gets the normal site.
-    public const string SmartTvUserAgent =
-        "Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) AppleWebKit/537.36 (KHTML, like Gecko) 76.0.3809.146/6.0 TV Safari/537.36";
+    // What YouTube's TV interface (youtube.com/tv) expects: the browser of a
+    // console (Cobalt, on a PS5). A desktop browser gets the normal site.
+    public const string SmartTvUserAgent = "Mozilla/5.0 (Linux; Android 12) Cobalt/22.2.3-gold (PS5)";
+
+    // Sent by the first test build; YouTube answers it with the normal site.
+    static readonly string[] RetiredUserAgents =
+    {
+        "Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) AppleWebKit/537.36 (KHTML, like Gecko) 76.0.3809.146/6.0 TV Safari/537.36",
+    };
+
+    /// <summary>Replaces a user agent that stopped working, in tiles saved by an older version.</summary>
+    public static void UpdateUserAgents(IEnumerable<TvApp> apps)
+    {
+        foreach (var app in apps)
+            if (Array.IndexOf(RetiredUserAgents, app.UserAgent.Trim()) >= 0) app.UserAgent = SmartTvUserAgent;
+    }
 
     /// <summary>Shown on the tile. Empty on the Desktop tile: it uses the translated name.</summary>
     public string Name { get; set; } = "";

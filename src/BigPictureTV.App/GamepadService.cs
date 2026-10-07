@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
 using BigPictureTV.Core;
@@ -7,8 +8,9 @@ using BigPictureTV.Core.Input;
 namespace BigPictureTV.App;
 
 /// <summary>
-/// Watches Xbox-style (XInput) controllers on its own thread for the combo
-/// from the settings. Reads connected controllers about 30 times a second
+/// Watches controllers on its own thread for the combo from the settings,
+/// through SDL (Xbox, PlayStation, Switch and more), or XInput (Xbox-style
+/// only) if SDL can't load. Reads connected controllers about 30 times a second
 /// and only looks for new ones every 2 seconds, so it costs next to nothing.
 /// </summary>
 sealed class GamepadService : IDisposable
@@ -24,7 +26,8 @@ sealed class GamepadService : IDisposable
     readonly Action _onCombo;
     readonly Thread _thread;
     readonly ManualResetEventSlim _stop = new();
-    readonly ComboDetector[] _detectors = new ComboDetector[MaxControllers];
+    readonly Dictionary<int, ComboDetector> _detectors = new();
+    SdlPads? _sdl;
     readonly bool[] _connected = new bool[MaxControllers];
     uint _lastError;
     volatile int _pressed = -1;
@@ -51,45 +54,62 @@ sealed class GamepadService : IDisposable
     {
         _log = log;
         _onCombo = onCombo;
-        for (int i = 0; i < MaxControllers; i++) _detectors[i] = new ComboDetector();
         _thread = new Thread(Run) { IsBackground = true, Name = "Controller", Priority = ThreadPriority.BelowNormal };
         _thread.Start();
     }
 
     void Run()
     {
-        var nextProbe = DateTime.MinValue;
-        while (!_stop.IsSet)
+        _sdl = SdlPads.TryStart(_log);
+        try
         {
-            var now = DateTime.UtcNow;
-            bool probe = now >= nextProbe;
-            if (probe) nextProbe = now + ProbeEvery;
-
-            int pressed = -1;
-            var stick = GamepadButtons.None;
-            for (int i = 0; i < MaxControllers && _available; i++)
+            var nextProbe = DateTime.MinValue;
+            while (!_stop.IsSet)
             {
-                if (!_connected[i] && !probe) continue;
-                var buttons = Read(i, out var pushed);
-                bool was = _connected[i];
-                _connected[i] = buttons != null;
-                if (was != _connected[i])
-                    _log.Write(_connected[i] ? $"Controller {i + 1} connected." : $"Controller {i + 1} disconnected (XInput error {_lastError}).");
-                if (buttons == null) continue;
+                var now = DateTime.UtcNow;
+                bool probe = now >= nextProbe;
+                if (probe) nextProbe = now + ProbeEvery;
 
-                pressed = (pressed < 0 ? 0 : pressed) | (int)buttons.Value;
-                stick |= pushed;
-                if (_detectors[i].Update(Combo, buttons.Value, now))
+                int pressed = -1;
+                var stick = GamepadButtons.None;
+                foreach (var (id, buttons, pushed) in _sdl != null ? _sdl.Read(probe) : ReadXInput(probe))
                 {
-                    _log.Write($"Controller {i + 1}: {GamepadCombo.Format(Combo)} held.");
-                    if (Rumble) Buzz(i);
-                    _onCombo();
+                    pressed = (pressed < 0 ? 0 : pressed) | (int)buttons;
+                    stick |= pushed;
+                    if (!_detectors.TryGetValue(id, out var detector)) _detectors[id] = detector = new ComboDetector();
+                    if (detector.Update(Combo, buttons, now))
+                    {
+                        _log.Write($"Controller {id}: {GamepadCombo.Format(Combo)} held.");
+                        if (Rumble) Buzz(id);
+                        _onCombo();
+                    }
                 }
+                _pressed = pressed;
+                if (pressed >= 0) Listener?.Invoke((GamepadButtons)pressed | stick);
+                _stop.Wait(pressed < 0 ? ProbeEvery : PollEvery);
             }
-            _pressed = pressed;
-            if (pressed >= 0) Listener?.Invoke((GamepadButtons)pressed | stick);
-            _stop.Wait(pressed < 0 ? ProbeEvery : PollEvery);
         }
+        finally
+        {
+            _sdl?.Dispose();
+        }
+    }
+
+    // Fallback when SDL can't load: Xbox-style controllers only.
+    List<(int Id, GamepadButtons Buttons, GamepadButtons Stick)> ReadXInput(bool probe)
+    {
+        var pads = new List<(int, GamepadButtons, GamepadButtons)>();
+        for (int i = 0; i < MaxControllers && _available; i++)
+        {
+            if (!_connected[i] && !probe) continue;
+            var buttons = Read(i, out var pushed);
+            bool was = _connected[i];
+            _connected[i] = buttons != null;
+            if (was != _connected[i])
+                _log.Write(_connected[i] ? $"Controller {i} connected." : $"Controller {i} disconnected (XInput error {_lastError}).");
+            if (buttons != null) pads.Add((i, buttons.Value, pushed));
+        }
+        return pads;
     }
 
     GamepadButtons? Read(int index, out GamepadButtons stick)
@@ -126,6 +146,11 @@ sealed class GamepadService : IDisposable
     // A short buzz so the player knows the combo worked, even with the TV still dark.
     void Buzz(int index)
     {
+        if (_sdl != null)
+        {
+            _sdl.Buzz(index);
+            return;
+        }
         var on = new XINPUT_VIBRATION { wLeftMotorSpeed = 30000, wRightMotorSpeed = 30000 };
         var off = new XINPUT_VIBRATION();
         XInputSetState((uint)index, ref on);

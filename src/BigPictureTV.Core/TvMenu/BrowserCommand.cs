@@ -35,6 +35,23 @@ public static class BrowserCommand
         return string.Join(" ", args);
     }
 
+    /// <summary>
+    /// True for the command line of the browser's main process for this
+    /// profile; its helper processes (tabs, GPU...) carry a --type= switch.
+    /// </summary>
+    public static bool IsMainProcessFor(string? commandLine, string profileDir)
+    {
+        if (string.IsNullOrEmpty(commandLine) || commandLine.Contains("--type=", StringComparison.Ordinal)) return false;
+        string dir = profileDir.TrimEnd('\\', '/');
+        int at = commandLine.IndexOf("--user-data-dir=", StringComparison.OrdinalIgnoreCase);
+        if (at < 0) return false;
+        string value = commandLine[(at + "--user-data-dir=".Length)..].TrimStart('"');
+        if (!value.StartsWith(dir, StringComparison.OrdinalIgnoreCase)) return false;
+        string rest = value[dir.Length..];
+        // The same folder, not one whose name merely starts the same.
+        return rest.Length == 0 || rest[0] is '"' or ' ' or '\\' or '/';
+    }
+
     // Windows command line quoting for values without quotes of their own
     // (paths, URLs and user agents); a stray quote is dropped.
     static string Quote(string value)
