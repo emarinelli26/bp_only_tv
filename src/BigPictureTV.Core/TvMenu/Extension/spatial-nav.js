@@ -27,7 +27,7 @@
   }
 
   function shown(el) {
-    if (el.disabled || el.closest('[aria-hidden=true],[inert]')) return false;
+    if (el.disabled || el.closest('[inert]')) return false; // aria-hidden too often marks carousel cards out of view
     const r = el.getBoundingClientRect();
     if (r.width < 4 || r.height < 4) return false;
     if (el.checkVisibility) return el.checkVisibility({ opacityProperty: true, visibilityProperty: true });
@@ -38,12 +38,30 @@
     return true;
   }
 
-  // Everything that can be chosen; a card that is a link wins over what's inside it.
+  // Everything that can be chosen; a card that is a link wins over what's
+  // inside it, and of several links to the same place (a card's picture and
+  // its title) only the biggest stays, so each card is one stop.
   function targets() {
-    return [...document.querySelectorAll(SELECTOR)].filter(el => {
+    const list = [...document.querySelectorAll(SELECTOR)].filter(el => {
       const outer = el.parentElement && el.parentElement.closest(SELECTOR);
       return !(outer && shown(outer)) && shown(el);
     });
+    const byHref = new Map();
+    for (const el of list) {
+      const href = el.tagName === 'A' && el.getAttribute('href');
+      if (!href || href === '#') continue;
+      const kept = byHref.get(href);
+      if (!kept || area(el) > area(kept)) byHref.set(href, el);
+    }
+    return list.filter(el => {
+      const href = el.tagName === 'A' && el.getAttribute('href');
+      return !href || href === '#' || byHref.get(href) === el;
+    });
+  }
+
+  function area(el) {
+    const r = el.getBoundingClientRect();
+    return r.width * r.height;
   }
 
   function isText(el) {
@@ -81,7 +99,7 @@
     } else if (document.activeElement && document.activeElement !== document.body) {
       document.activeElement.blur(); // out of the player or text box, without typing in it
     }
-    el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+    reveal(el);
   }
 
   function valid(el) {
@@ -101,31 +119,59 @@
     })[0];
   }
 
-  // The nearest target in that direction: how far ahead, plus twice how far
-  // off to the side (zero when they line up), so neighbours in a row or a
-  // column win over closer ones diagonally.
+  // The nearest target in that direction. Ones lined up with the current
+  // one (same row for left/right, same column for up/down) always win;
+  // among them the closest ahead, then the best centred.
   function next(from, dir, list) {
     const a = from.getBoundingClientRect();
+    const vertical = dir === 'down' || dir === 'up';
     let best = null, bestScore = Infinity;
     for (const el of list) {
       if (el === from || from.contains(el) || el.contains(from)) continue;
       const b = el.getBoundingClientRect();
-      let ahead, side;
-      if (dir === 'down' || dir === 'up') {
+      let ahead, gap, offset;
+      if (vertical) {
         ahead = dir === 'down' ? b.top - a.bottom : a.top - b.bottom;
-        if (ahead < -Math.min(a.height, b.height) / 2) continue;
-        side = Math.max(0, Math.max(a.left, b.left) - Math.min(a.right, b.right));
-        if (side === 0) side = Math.abs((a.left + a.right) / 2 - (b.left + b.right) / 2) / 10;
+        if ((dir === 'down' ? b.top + b.bottom - a.top - a.bottom : a.top + a.bottom - b.top - b.bottom) <= 0) continue;
+        gap = Math.max(a.left, b.left) - Math.min(a.right, b.right);
+        offset = Math.abs((a.left + a.right) - (b.left + b.right)) / 2;
       } else {
         ahead = dir === 'right' ? b.left - a.right : a.left - b.right;
-        if (ahead < -Math.min(a.width, b.width) / 2) continue;
-        side = Math.max(0, Math.max(a.top, b.top) - Math.min(a.bottom, b.bottom));
-        if (side === 0) side = Math.abs((a.top + a.bottom) / 2 - (b.top + b.bottom) / 2) / 10;
+        if ((dir === 'right' ? b.left + b.right - a.left - a.right : a.left + a.right - b.left - b.right) <= 0) continue;
+        gap = Math.max(a.top, b.top) - Math.min(a.bottom, b.bottom);
+        offset = Math.abs((a.top + a.bottom) - (b.top + b.bottom)) / 2;
       }
-      const score = Math.max(0, ahead) + 2 * side;
+      const lined = gap < 0;
+      // Up and down go to the next card, not to a button on the same one.
+      const sameCard = vertical && inSameCard(from, el);
+      const score = (lined ? 0 : 1e6 + gap * 3) + (sameCard ? 5e5 : 0) + Math.max(0, ahead) + offset / 4;
       if (score < bestScore) { bestScore = score; best = el; }
     }
+    // Going up or down onto a card lands on its main (biggest) link, not on
+    // a small button at its edge.
+    if (best && vertical) {
+      for (const el of list)
+        if (el !== best && area(el) > area(best) && inSameCard(best, el)) best = el;
+    }
     return best;
+  }
+
+  // Whether two targets belong to one card: their nearest common box is
+  // not much bigger than the larger of them.
+  function inSameCard(a, b) {
+    let common = a.parentElement;
+    while (common && !common.contains(b)) common = common.parentElement;
+    if (!common || common === document.body) return false;
+    const box = common.getBoundingClientRect();
+    return box.width < innerWidth / 2 && box.width * box.height < 3 * Math.max(area(a), area(b));
+  }
+
+  // Scroll only when the choice is out of view or near an edge, and then put
+  // it in the middle, so the page doesn't jump on every press.
+  function reveal(el) {
+    const r = el.getBoundingClientRect(), margin = Math.min(120, innerHeight / 6);
+    const outside = r.top < margin || r.bottom > innerHeight - margin || r.left < 0 || r.right > innerWidth;
+    if (outside) el.scrollIntoView({ block: r.height > innerHeight - 2 * margin ? 'start' : 'center', inline: 'nearest', behavior: 'smooth' });
   }
 
   function move(dir) {
