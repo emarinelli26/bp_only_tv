@@ -182,6 +182,39 @@ sealed class TvSession : IDisposable
         return running;
     }
 
+    async Task AttachPageAsync(RunningApp app)
+    {
+        try
+        {
+            var page = await CdpPage.ConnectAsync(app.Profile!, _log, TimeSpan.FromSeconds(15));
+            if (page == null)
+            {
+                _log.Write($"No DevTools connection to {app.App}; the controller types keys instead.");
+                return;
+            }
+            if (app.Gone)
+            {
+                page.Dispose();
+                return;
+            }
+            if (app.App.UserAgent.Trim().Length > 0)
+            {
+                await page.PretendToBeTvAsync(app.App.UserAgent.Trim());
+                await page.NavigateAsync(app.App.Target.Trim()); // load it again, now as a TV
+            }
+            else
+            {
+                await page.InjectIsolatedAsync(SpatialNav.Script, SpatialNav.World); // the cross moves between links and buttons
+            }
+            app.Attach(page);
+            _log.Write($"Connected to the page of {app.App}.");
+        }
+        catch (Exception e)
+        {
+            _log.Write($"Connecting to {app.App} failed: {e.Message}");
+        }
+    }
+
     // A window Windows opens behind the one in front leaves the taskbar on top
     // of a full-screen page until it's clicked: bring it forward once it's up.
     async Task FocusWhenShownAsync(RunningApp app)
@@ -221,28 +254,14 @@ sealed class TvSession : IDisposable
                 await Task.Delay(500);
             }
 
-            var page = await CdpPage.ConnectAsync(app.Profile!, _log, TimeSpan.FromSeconds(15));
-            if (page == null)
+            if (app.App.UserAgent.Trim().Length == 0)
             {
-                _log.Write($"No DevTools connection to {app.App}; the controller types keys instead.");
+                // Not a TV page: stay out of it until the controller is used,
+                // so security checks at load time (Cloudflare) see a plain browser.
+                app.ConnectLater = () => AttachPageAsync(app);
                 return;
             }
-            if (app.Gone)
-            {
-                page.Dispose();
-                return;
-            }
-            if (app.App.UserAgent.Trim().Length > 0)
-            {
-                await page.PretendToBeTvAsync(app.App.UserAgent.Trim());
-                await page.NavigateAsync(app.App.Target.Trim()); // load it again, now as a TV
-            }
-            else
-            {
-                await page.InjectAsync(SpatialNav.Script); // the cross moves between links and buttons
-            }
-            app.Attach(page);
-            _log.Write($"Connected to the page of {app.App}.");
+            await AttachPageAsync(app);
             Post(() => FocusIfInFront(app));
         }
         catch (Exception e)

@@ -105,11 +105,21 @@ sealed class CdpPage : IDisposable
         });
     }
 
-    /// <summary>Runs a script in the page now and in every page it loads later.</summary>
-    public async Task InjectAsync(string script)
+    /// <summary>
+    /// Runs a script in an isolated world of the page (its own globals, the
+    /// same DOM), now and in every page it loads later. The page's scripts
+    /// can't see it.
+    /// </summary>
+    public async Task InjectIsolatedAsync(string script, string world)
     {
-        await SendAsync("Page.addScriptToEvaluateOnNewDocument", new JsonObject { ["source"] = script });
-        await SendAsync("Runtime.evaluate", new JsonObject { ["expression"] = script });
+        await SendAsync("Page.enable", null); // without it, scripts for later pages don't run in a named world
+        await SendAsync("Page.addScriptToEvaluateOnNewDocument", new JsonObject { ["source"] = script, ["worldName"] = world });
+        var tree = await SendAsync("Page.getFrameTree", null);
+        string? frame = (string?)tree?["frameTree"]?["frame"]?["id"];
+        if (frame == null) return;
+        var created = await SendAsync("Page.createIsolatedWorld", new JsonObject { ["frameId"] = frame, ["worldName"] = world });
+        if (created?["executionContextId"] is { } context)
+            await SendAsync("Runtime.evaluate", new JsonObject { ["expression"] = script, ["contextId"] = context.GetValue<int>() });
     }
 
     public Task NavigateAsync(string url) => SendAsync("Page.navigate", new JsonObject { ["url"] = url });
@@ -168,17 +178,17 @@ sealed class CdpPage : IDisposable
     async Task ReceiveLoop()
     {
         var buffer = new byte[64 * 1024];
-        var text = new StringBuilder();
+        var message = new System.IO.MemoryStream(); // whole messages: a character can be split between reads
         try
         {
             while (_socket.State == WebSocketState.Open)
             {
                 var result = await _socket.ReceiveAsync(buffer, _stop.Token);
                 if (result.MessageType == WebSocketMessageType.Close) break;
-                text.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
+                message.Write(buffer, 0, result.Count);
                 if (!result.EndOfMessage) continue;
-                var node = JsonNode.Parse(text.ToString());
-                text.Clear();
+                var node = JsonNode.Parse(message.ToArray());
+                message.SetLength(0);
                 if (node?["id"] is JsonNode idNode && _pending.TryGetValue((int)idNode, out var waiter))
                 {
                     if (node["error"] is JsonNode error) waiter.TrySetException(new InvalidOperationException((string?)error["message"] ?? "DevTools error"));

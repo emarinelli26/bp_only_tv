@@ -16,17 +16,28 @@ public static class SpatialNav
 
     public static string Script => Source.Value;
 
-    /// <summary>JavaScript that runs one command and says whether the page handled it ("true"/"false").</summary>
-    public static string Call(PadAction action) => action switch
-    {
-        PadAction.Up => Move("up"),
-        PadAction.Down => Move("down"),
-        PadAction.Left => Move("left"),
-        PadAction.Right => Move("right"),
-        PadAction.Accept => "!!(window.__tvNav && __tvNav.accept())",
-        PadAction.Search => "!!(window.__tvNav && __tvNav.search())",
-        _ => "false",
-    };
+    /// <summary>The isolated world the script runs in, apart from the page's own scripts.</summary>
+    public const string World = "tvnav";
 
-    static string Move(string direction) => $"!!(window.__tvNav && __tvNav.move('{direction}'))";
+    /// <summary>
+    /// JavaScript, run in the page, that sends the script one command and
+    /// says whether it handled it ("true"/"false"); null for actions it doesn't take.
+    /// </summary>
+    public static string? Call(PadAction action)
+    {
+        string? command = action switch
+        {
+            PadAction.Up => "up",
+            PadAction.Down => "down",
+            PadAction.Left => "left",
+            PadAction.Right => "right",
+            PadAction.Accept => "accept",
+            PadAction.Search => "search",
+            _ => null,
+        };
+        return command == null ? null :
+            "(() => { const d = document.documentElement; if (!d) return false; d.removeAttribute('data-tvnav');" +
+            $" document.dispatchEvent(new CustomEvent('tvnav', {{ detail: '{command}' }}));" +
+            " const done = d.getAttribute('data-tvnav') === '1'; d.removeAttribute('data-tvnav'); return done; })()";
+    }
 }

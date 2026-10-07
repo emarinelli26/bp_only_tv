@@ -122,9 +122,9 @@ public class TvMenuTests
     [Fact]
     public void TheSpatialNavigationScriptShipsWithTheApp()
     {
-        Assert.Contains("window.__tvNav = { move, accept, search }", SpatialNav.Script);
-        Assert.Equal("!!(window.__tvNav && __tvNav.move('left'))", SpatialNav.Call(PadAction.Left));
-        Assert.Equal("false", SpatialNav.Call(PadAction.PlayPause));
+        Assert.Contains("document.addEventListener('tvnav'", SpatialNav.Script);
+        Assert.Contains("detail: 'left'", SpatialNav.Call(PadAction.Left));
+        Assert.Null(SpatialNav.Call(PadAction.PlayPause));
     }
 
     [Fact]

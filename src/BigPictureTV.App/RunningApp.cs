@@ -83,6 +83,9 @@ sealed class RunningApp : IDisposable
         old?.Dispose();
     }
 
+    /// <summary>Connects to the page the first time the controller is used; null once started.</summary>
+    public Func<Task>? ConnectLater { get; set; }
+
     public void Attach(CdpPage page)
     {
         Page = page;
@@ -129,6 +132,16 @@ sealed class RunningApp : IDisposable
         if (!IsWeb) return;
         var keys = KeysFor(action);
         if (keys == null) return;
+        if (Page == null && ConnectLater is { } connect)
+        {
+            ConnectLater = null;
+            Queue(async () =>
+            {
+                await connect();
+                if (Page is { } connected) await SendToPageAsync(connected, action, keys.Value);
+            });
+            return;
+        }
         if (Page is { } page)
         {
             if (TvInterface) Queue(() => SendToTvAsync(page, action, keys.Value));
@@ -161,8 +174,7 @@ sealed class RunningApp : IDisposable
     // whatever it leaves to the page (a playing video, a text box) gets the key.
     static async Task SendToPageAsync(CdpPage page, PadAction action, Hotkey keys)
     {
-        string call = SpatialNav.Call(action);
-        if (call != "false" && await page.EvaluateAsync(call) == "true") return;
+        if (SpatialNav.Call(action) is { } call && await page.EvaluateAsync(call) == "true") return;
         if (action == PadAction.Search && keys.Key == CdpKeys.BrowserSearch) return; // nothing to search with
         await PressAsync(page, keys);
     }

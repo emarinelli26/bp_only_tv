@@ -3,8 +3,13 @@
 // the pages of the TV menu (never into the user's own browser). Each call
 // returns true if it handled the press, or false to let the page get the
 // real key instead (a playing video, text being edited, an embedded player).
+//
+// It runs in a world of its own, out of the page's sight (anti-bot checks,
+// like Cloudflare's, look for anything unusual), and takes commands as a
+// "tvnav" event on the document, answering in a data-tvnav attribute.
 (() => {
-  if (window.__tvNav || window.top !== window) return;
+  if (window.__tvNavLoaded || window.top !== window) return;
+  window.__tvNavLoaded = true;
 
   const SELECTOR = [
     'a[href]', 'button', 'input:not([type=hidden])', 'select', 'textarea', 'iframe', 'summary',
@@ -172,5 +177,20 @@
     return false;
   }
 
-  window.__tvNav = { move, accept, search };
+  // A security check (Cloudflare and the like) is left completely alone.
+  function checking() {
+    return /just a moment|un momento|attention required/i.test(document.title) ||
+      !!document.querySelector('#challenge-form, #challenge-running, .cf-turnstile, [name="cf-turnstile-response"]');
+  }
+
+  const commands = {
+    up: () => move('up'), down: () => move('down'), left: () => move('left'), right: () => move('right'),
+    accept, search,
+  };
+  document.addEventListener('tvnav', e => {
+    const command = commands[e.detail];
+    let handled = false;
+    try { handled = !!command && !checking() && command(); } catch (err) { handled = false; }
+    document.documentElement.setAttribute('data-tvnav', handled ? '1' : '0');
+  });
 })();
