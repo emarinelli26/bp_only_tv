@@ -132,7 +132,7 @@ sealed class RunningApp : IDisposable
         if (Page is { } page)
         {
             if (TvInterface) Queue(() => SendToTvAsync(page, action, keys.Value));
-            else Queue(() => PressAsync(page, keys.Value));
+            else Queue(() => SendToPageAsync(page, action, keys.Value));
             return;
         }
         if (keys.Value.Key == KeySender.VK_MEDIA_PLAY_PAUSE)
@@ -155,6 +155,16 @@ sealed class RunningApp : IDisposable
     {
         if (keys == AltLeft) return page.GoBackAsync(); // browser shortcut, not a page key
         return CdpKeys.For(keys) is { } k ? page.PressAsync(k.Key, k.Code, k.VirtualKey, k.Modifiers, k.Text) : Task.CompletedTask;
+    }
+
+    // Other pages: the injected spatial navigation moves the focus box, and
+    // whatever it leaves to the page (a playing video, a text box) gets the key.
+    static async Task SendToPageAsync(CdpPage page, PadAction action, Hotkey keys)
+    {
+        string call = SpatialNav.Call(action);
+        if (call != "false" && await page.EvaluateAsync(call) == "true") return;
+        if (action == PadAction.Search && keys.Key == CdpKeys.BrowserSearch) return; // nothing to search with
+        await PressAsync(page, keys);
     }
 
     static Task PressGamepadAsync(CdpPage page, uint key) => page.PressAsync("Unidentified", "", (int)key, 0);

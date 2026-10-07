@@ -237,6 +237,10 @@ sealed class TvSession : IDisposable
                 await page.PretendToBeTvAsync(app.App.UserAgent.Trim());
                 await page.NavigateAsync(app.App.Target.Trim()); // load it again, now as a TV
             }
+            else
+            {
+                await page.InjectAsync(SpatialNav.Script); // the cross moves between links and buttons
+            }
             app.Attach(page);
             _log.Write($"Connected to the page of {app.App}.");
             Post(() => FocusIfInFront(app));

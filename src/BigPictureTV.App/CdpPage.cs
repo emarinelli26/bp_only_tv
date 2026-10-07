@@ -105,6 +105,13 @@ sealed class CdpPage : IDisposable
         });
     }
 
+    /// <summary>Runs a script in the page now and in every page it loads later.</summary>
+    public async Task InjectAsync(string script)
+    {
+        await SendAsync("Page.addScriptToEvaluateOnNewDocument", new JsonObject { ["source"] = script });
+        await SendAsync("Runtime.evaluate", new JsonObject { ["expression"] = script });
+    }
+
     public Task NavigateAsync(string url) => SendAsync("Page.navigate", new JsonObject { ["url"] = url });
 
     public Task GoBackAsync() => SendAsync("Runtime.evaluate", new JsonObject { ["expression"] = "history.back()" });
