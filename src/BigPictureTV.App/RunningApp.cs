@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using BigPictureTV.Core;
@@ -130,12 +131,8 @@ sealed class RunningApp : IDisposable
         if (keys == null) return;
         if (Page is { } page)
         {
-            // YouTube TV ignores the remote's search key from a PC; its search
-            // screen is a page of its own, so go there.
-            if (action == PadAction.Search && TvInterface && App.SearchKey.Trim().Length == 0)
-                _ = Quiet(page.EvaluateAsync("if (!location.hash.startsWith('#/search')) location.hash = '#/search'"));
-            else if (keys.Value == AltLeft) _ = Quiet(page.GoBackAsync()); // browser shortcut, not a page key
-            else if (CdpKeys.For(keys.Value) is { } k) _ = Quiet(page.PressAsync(k.Key, k.Code, k.VirtualKey, k.Modifiers, k.Text));
+            if (TvInterface) Queue(() => SendToTvAsync(page, action, keys.Value));
+            else Queue(() => PressAsync(page, keys.Value));
             return;
         }
         if (keys.Value.Key == KeySender.VK_MEDIA_PLAY_PAUSE)
@@ -143,6 +140,79 @@ sealed class RunningApp : IDisposable
         else if (keys.Value.Key < 0xE0 && (OwnsForegroundWindow() ||
                  string.Equals(KeySender.ForegroundProcessName(), BrowserName, StringComparison.OrdinalIgnoreCase)))
             KeySender.Send(keys.Value);
+    }
+
+    // Page commands run one after another, in the order pressed.
+    Task _pageWork = Task.CompletedTask;
+    readonly object _pageWorkLock = new();
+
+    void Queue(Func<Task> work)
+    {
+        lock (_pageWorkLock) _pageWork = _pageWork.ContinueWith(_ => Quiet(work())).Unwrap();
+    }
+
+    static Task PressAsync(CdpPage page, Hotkey keys)
+    {
+        if (keys == AltLeft) return page.GoBackAsync(); // browser shortcut, not a page key
+        return CdpKeys.For(keys) is { } k ? page.PressAsync(k.Key, k.Code, k.VirtualKey, k.Modifiers, k.Text) : Task.CompletedTask;
+    }
+
+    static Task PressGamepadAsync(CdpPage page, uint key) => page.PressAsync("Unidentified", "", (int)key, 0);
+
+    // YouTube's TV interface believes it runs on a PS5 (see the user agent),
+    // where the console hands it controller buttons as these key codes
+    // (Cobalt's kSbKeyGamepad*): that's what makes Triangle search, Square
+    // delete and L2/R2 switch the keyboard, as on the console.
+    const uint GamepadSquare = 0x8002, GamepadTriangle = 0x8003, GamepadL2 = 0x8006, GamepadR2 = 0x8007;
+
+    // A key code that opened YouTube's search here, remembered for next time.
+    uint? _searchKey;
+
+    async Task SendToTvAsync(CdpPage page, PadAction action, Hotkey keys)
+    {
+        switch (action)
+        {
+            case PadAction.Search when App.SearchKey.Trim().Length == 0:
+                if (await InSearchAsync(page)) await PressGamepadAsync(page, GamepadTriangle);
+                else await OpenSearchAsync(page);
+                return;
+            case PadAction.Option:
+                await PressGamepadAsync(page, GamepadSquare);
+                return;
+            case PadAction.PageUp or PadAction.PageDown when await InSearchAsync(page):
+                await PressGamepadAsync(page, action == PadAction.PageUp ? GamepadL2 : GamepadR2);
+                return;
+            default:
+                await PressAsync(page, keys);
+                return;
+        }
+    }
+
+    static async Task<bool> InSearchAsync(CdpPage page) =>
+        (await page.EvaluateAsync("location.href"))?.Contains("search", StringComparison.OrdinalIgnoreCase) == true;
+
+    // Tries what a console sends first, then a TV remote's search key, then
+    // the keyboard's S, and keeps the first that gets to the search screen.
+    async Task OpenSearchAsync(CdpPage page)
+    {
+        uint[] ways = { GamepadTriangle, CdpKeys.BrowserSearch, 0x53 };
+        if (_searchKey is { } known) ways = ways.Where(w => w != known).Prepend(known).ToArray();
+        foreach (var way in ways)
+        {
+            if (way == 0x53) await page.PressAsync("s", "KeyS", 0x53, 0, "s");
+            else await PressGamepadAsync(page, way);
+            for (int i = 0; i < 8; i++)
+            {
+                await Task.Delay(100);
+                if (await InSearchAsync(page))
+                {
+                    if (_searchKey != way) _log.Write($"{App}: key 0x{way:X} opens search.");
+                    _searchKey = way;
+                    return;
+                }
+            }
+        }
+        _log.Write($"{App}: no key opened search (page at {await page.EvaluateAsync("location.href")}).");
     }
 
     static readonly Hotkey AltLeft = new(KeyModifiers.Alt, 0x25);

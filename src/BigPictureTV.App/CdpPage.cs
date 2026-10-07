@@ -109,8 +109,12 @@ sealed class CdpPage : IDisposable
 
     public Task GoBackAsync() => SendAsync("Runtime.evaluate", new JsonObject { ["expression"] = "history.back()" });
 
-    /// <summary>Runs a line of JavaScript in the page.</summary>
-    public Task EvaluateAsync(string expression) => SendAsync("Runtime.evaluate", new JsonObject { ["expression"] = expression });
+    /// <summary>Runs JavaScript in the page and returns its value as text (null if none).</summary>
+    public async Task<string?> EvaluateAsync(string expression)
+    {
+        var result = await SendAsync("Runtime.evaluate", new JsonObject { ["expression"] = expression, ["returnByValue"] = true });
+        return result?["result"]?["value"]?.ToString();
+    }
 
     public Task BringToFrontAsync() => SendAsync("Page.bringToFront", null);
 
@@ -130,6 +134,8 @@ sealed class CdpPage : IDisposable
         });
     }
 
+    readonly SemaphoreSlim _sending = new(1, 1);
+
     async Task<JsonNode?> SendAsync(string method, JsonObject? parameters, bool browserLevel = false)
     {
         int id = Interlocked.Increment(ref _nextId);
@@ -137,7 +143,15 @@ sealed class CdpPage : IDisposable
         if (!browserLevel && _session != null) message["sessionId"] = _session;
         var reply = new TaskCompletionSource<JsonNode?>(TaskCreationOptions.RunContinuationsAsynchronously);
         _pending[id] = reply;
-        await _socket.SendAsync(Encoding.UTF8.GetBytes(message.ToJsonString()), WebSocketMessageType.Text, true, _stop.Token);
+        await _sending.WaitAsync(_stop.Token); // a WebSocket takes one message at a time
+        try
+        {
+            await _socket.SendAsync(Encoding.UTF8.GetBytes(message.ToJsonString()), WebSocketMessageType.Text, true, _stop.Token);
+        }
+        finally
+        {
+            _sending.Release();
+        }
         var done = await Task.WhenAny(reply.Task, Task.Delay(TimeSpan.FromSeconds(10), _stop.Token));
         _pending.TryRemove(id, out _);
         if (done != reply.Task) throw new OperationCanceledException($"No answer to {method}.");
