@@ -126,11 +126,6 @@ sealed class RunningApp : IDisposable
     public void Send(PadAction action)
     {
         if (!IsWeb) return;
-        if (action == PadAction.PlayPause)
-        {
-            KeySender.Send(new Hotkey(KeyModifiers.None, KeySender.VK_MEDIA_PLAY_PAUSE)); // media keys work anywhere
-            return;
-        }
         var keys = KeysFor(action);
         if (keys == null) return;
         if (Page is { } page)
@@ -139,25 +134,35 @@ sealed class RunningApp : IDisposable
             else if (CdpKeys.For(keys.Value) is { } k) _ = Quiet(page.PressAsync(k.Key, k.Code, k.VirtualKey, k.Modifiers, k.Text));
             return;
         }
-        if (OwnsForegroundWindow() || string.Equals(KeySender.ForegroundProcessName(), BrowserName, StringComparison.OrdinalIgnoreCase))
+        if (keys.Value.Key == KeySender.VK_MEDIA_PLAY_PAUSE)
+            KeySender.Send(keys.Value); // media keys work anywhere
+        else if (keys.Value.Key < 0xE0 && (OwnsForegroundWindow() ||
+                 string.Equals(KeySender.ForegroundProcessName(), BrowserName, StringComparison.OrdinalIgnoreCase)))
             KeySender.Send(keys.Value);
     }
 
     static readonly Hotkey AltLeft = new(KeyModifiers.Alt, 0x25);
+    static Hotkey Press(uint key) => new(KeyModifiers.None, key);
+
+    // Pages with a TV interface (YouTube TV) understand a TV remote's keys,
+    // like a console's app does: LB/RB previous/next video, LT/RT rewind and
+    // fast forward. Other pages get keyboard keys to move around instead.
+    bool TvInterface => App.UserAgent.Trim().Length > 0;
 
     Hotkey? KeysFor(PadAction action) => action switch
     {
-        PadAction.Up => new Hotkey(KeyModifiers.None, 0x26),
-        PadAction.Down => new Hotkey(KeyModifiers.None, 0x28),
-        PadAction.Left => new Hotkey(KeyModifiers.None, 0x25),
-        PadAction.Right => new Hotkey(KeyModifiers.None, 0x27),
-        PadAction.Accept => new Hotkey(KeyModifiers.None, 0x0D),
+        PadAction.Up => Press(0x26),
+        PadAction.Down => Press(0x28),
+        PadAction.Left => Press(0x25),
+        PadAction.Right => Press(0x27),
+        PadAction.Accept => Press(0x0D),
         PadAction.Back => Hotkey.ParseAny(App.BackKey) ?? AltLeft,
-        PadAction.Search => Hotkey.ParseAny(App.SearchKey),
-        PadAction.Previous => new Hotkey(KeyModifiers.Shift, 0x09),
-        PadAction.Next => new Hotkey(KeyModifiers.None, 0x09),
-        PadAction.PageUp => new Hotkey(KeyModifiers.None, 0x21),
-        PadAction.PageDown => new Hotkey(KeyModifiers.None, 0x22),
+        PadAction.Search => Hotkey.ParseAny(App.SearchKey) ?? Press(CdpKeys.BrowserSearch),
+        PadAction.PlayPause => Press(KeySender.VK_MEDIA_PLAY_PAUSE),
+        PadAction.Previous => TvInterface ? Press(CdpKeys.MediaPrevious) : new Hotkey(KeyModifiers.Shift, 0x09),
+        PadAction.Next => TvInterface ? Press(CdpKeys.MediaNext) : Press(0x09),
+        PadAction.PageUp => TvInterface ? Press(CdpKeys.MediaRewind) : Press(0x21),
+        PadAction.PageDown => TvInterface ? Press(CdpKeys.MediaFastForward) : Press(0x22),
         _ => null,
     };
 
@@ -189,6 +194,9 @@ sealed class RunningApp : IDisposable
         Dispose();
     }
 
+    /// <summary>Whether its main window is up yet.</summary>
+    public bool HasWindow => MainWindow() != IntPtr.Zero;
+
     IntPtr MainWindow()
     {
         try
@@ -219,6 +227,11 @@ sealed class RunningApp : IDisposable
 /// <summary>DevTools names for the keys the controller sends.</summary>
 static class CdpKeys
 {
+    // Key codes TV remotes send to web apps. Search and play/pause are
+    // Windows keys too; rewind and fast forward exist only on TVs (227, 228).
+    public const uint BrowserSearch = 0xAA, MediaNext = 0xB0, MediaPrevious = 0xB1, MediaPlayPause = 0xB3;
+    public const uint MediaRewind = 0xE3, MediaFastForward = 0xE4;
+
     public static (string Key, string Code, int VirtualKey, int Modifiers, string? Text)? For(Hotkey keys)
     {
         int mods = (keys.Modifiers.HasFlag(KeyModifiers.Alt) ? 1 : 0) | (keys.Modifiers.HasFlag(KeyModifiers.Ctrl) ? 2 : 0) |
@@ -240,6 +253,12 @@ static class CdpKeys
             0x23 => ("End", "End", null),
             0x24 => ("Home", "Home", null),
             0x2E => ("Delete", "Delete", null),
+            (int)BrowserSearch => ("BrowserSearch", "BrowserSearch", null),
+            (int)MediaNext => ("MediaTrackNext", "MediaTrackNext", null),
+            (int)MediaPrevious => ("MediaTrackPrevious", "MediaTrackPrevious", null),
+            (int)MediaPlayPause => ("MediaPlayPause", "MediaPlayPause", null),
+            (int)MediaRewind => ("MediaRewind", "MediaRewind", null),
+            (int)MediaFastForward => ("MediaFastForward", "MediaFastForward", null),
             >= 0x70 and <= 0x7B => ($"F{vk - 0x6F}", $"F{vk - 0x6F}", null),
             >= 0x41 and <= 0x5A => (((char)(vk + 32)).ToString(), $"Key{(char)vk}", mods is 0 or 8 ? ((char)(mods == 8 ? vk : vk + 32)).ToString() : null),
             >= 0x30 and <= 0x39 => (((char)vk).ToString(), $"Digit{(char)vk}", mods == 0 ? ((char)vk).ToString() : null),

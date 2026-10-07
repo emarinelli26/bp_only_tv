@@ -182,6 +182,26 @@ sealed class TvSession : IDisposable
         return running;
     }
 
+    // A window Windows opens behind the one in front leaves the taskbar on top
+    // of a full-screen page until it's clicked: bring it forward once it's up.
+    async Task FocusWhenShownAsync(RunningApp app)
+    {
+        for (int i = 0; i < 40 && !app.Gone; i++)
+        {
+            await Task.Delay(250);
+            if (app.Process != null && app.HasWindow)
+            {
+                Post(() => FocusIfInFront(app));
+                return;
+            }
+        }
+    }
+
+    void FocusIfInFront(RunningApp app)
+    {
+        if (!app.Gone && ReferenceEquals(_current, app)) app.BringToFront();
+    }
+
     // Finds the browser's main process (to bring it back, minimize it and
     // notice when it closes) and opens the DevTools channel to its page.
     async Task ConnectAsync(RunningApp app)
@@ -195,6 +215,7 @@ sealed class TvSession : IDisposable
                 {
                     foreach (var extra in found.Skip(1)) extra.Dispose();
                     Post(() => { if (!app.Gone) app.Follow(found[0]); else found[0].Dispose(); });
+                    _ = Task.Run(() => FocusWhenShownAsync(app));
                     break;
                 }
                 await Task.Delay(500);
@@ -218,6 +239,7 @@ sealed class TvSession : IDisposable
             }
             app.Attach(page);
             _log.Write($"Connected to the page of {app.App}.");
+            Post(() => FocusIfInFront(app));
         }
         catch (Exception e)
         {
