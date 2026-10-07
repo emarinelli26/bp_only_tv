@@ -19,13 +19,18 @@ public enum TvAppKind
 public sealed class TvApp
 {
     // What YouTube's TV interface (youtube.com/tv) expects: the browser of a
-    // console (Cobalt, on a PS5). A desktop browser gets the normal site.
-    public const string SmartTvUserAgent = "Mozilla/5.0 (Linux; Android 12) Cobalt/22.2.3-gold (PS5)";
+    // console (Cobalt, on a PS5), written the way Starboard writes it so the
+    // server recognizes a PlayStation. That turns on the console's buttons
+    // (Triangle searches, Square deletes). A desktop browser gets the normal site.
+    public const string SmartTvUserAgent =
+        "Mozilla/5.0 (X11; Linux x86_64) Cobalt/22.lts.3-gold (unlike Gecko) v8/8.8.278.17-jit gles Starboard/13, Sony_PS5_2020/1.0 (Sony, PS5, Wired)";
 
-    // Sent by the first test build; YouTube answers it with the normal site.
+    // Sent by earlier test builds. The Tizen one gets the normal site; the
+    // short Cobalt one gets the TV site as a generic device, without search.
     static readonly string[] RetiredUserAgents =
     {
         "Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) AppleWebKit/537.36 (KHTML, like Gecko) 76.0.3809.146/6.0 TV Safari/537.36",
+        "Mozilla/5.0 (Linux; Android 12) Cobalt/22.2.3-gold (PS5)",
     };
 
     /// <summary>Replaces a user agent that stopped working, in tiles saved by an older version.</summary>

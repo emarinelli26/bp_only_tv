@@ -76,7 +76,7 @@ Un toque al botón **Share/View** del mando (o el atajo de teclado) abre el **Me
 
 - **En el menú**: cruceta o stick izquierdo para moverte, A para abrir, B para volver.
 - **Como en una consola**: volver al menú no cierra la app. Queda abierta detrás, el mosaico dice "Abierta", A vuelve a ella y X la cierra. Puede haber varias abiertas a la vez (por ejemplo música mientras jugás). Si vas al escritorio, se minimizan.
-- **En una página**: se abre en Microsoft Edge a pantalla completa, con un perfil propio por mosaico (las sesiones quedan guardadas y no se mezclan con tu Edge). La app controla la página directamente: cruceta = flechas, A = Enter, B = volver, Y = buscar, Start = pausa. En YouTube los botones hacen lo mismo que en la app de PS5: LB/RB = video anterior/siguiente, LT/RT = retroceder/adelantar, y en el teclado de búsqueda X/Cuadrado borra y LT/RT cambian mayúsculas y símbolos; en otras páginas, LB/RB = elemento anterior/siguiente y LT/RT = subir/bajar página.
+- **En una página**: se abre en Microsoft Edge a pantalla completa, con un perfil propio por mosaico (las sesiones quedan guardadas y no se mezclan con tu Edge). La app controla la página directamente: cruceta = flechas, A = Enter, B = volver, Y = buscar, Start = pausa. En YouTube los botones hacen lo mismo que en la app de PS5: LB/RB = video anterior/siguiente, LT/RT = retroceder/adelantar, Y/Triángulo abre la búsqueda (y adentro pone un espacio), X/Cuadrado borra, y en el teclado LT/RT saltan de a 4 teclas; en otras páginas, LB/RB = elemento anterior/siguiente y LT/RT = subir/bajar página.
 - **YouTube** usa su interfaz de TV (youtube.com/tv), que ya se maneja con el mando y trae su teclado.
 - **Mandos**: Xbox, PlayStation (DualShock 4, DualSense), Switch y otros.
 

@@ -263,13 +263,14 @@ public class TvMenuTests
 
     [Fact]
     public void ShortcutsStillNeedAModifier() => Assert.Null(Hotkey.Parse("Esc"));
-    [Fact]
-    public void OldYouTubeUserAgentIsReplacedOnLoad()
+    [Theory]
+    [InlineData("Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) AppleWebKit/537.36 (KHTML, like Gecko) 76.0.3809.146/6.0 TV Safari/537.36")]
+    [InlineData("Mozilla/5.0 (Linux; Android 12) Cobalt/22.2.3-gold (PS5)")]
+    public void OldYouTubeUserAgentIsReplacedOnLoad(string tizen)
     {
         var file = Path.Combine(Path.GetTempPath(), $"bptv-{Guid.NewGuid():N}.json");
         try
         {
-            const string tizen = "Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) AppleWebKit/537.36 (KHTML, like Gecko) 76.0.3809.146/6.0 TV Safari/537.36";
             var settings = new AppSettings();
             settings.TvMenuApps[0].UserAgent = tizen;
             settings.TvMenuApps[1].UserAgent = "Custom/1.0";

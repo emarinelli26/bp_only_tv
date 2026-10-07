@@ -161,58 +161,33 @@ sealed class RunningApp : IDisposable
 
     // YouTube's TV interface believes it runs on a PS5 (see the user agent),
     // where the console hands it controller buttons as these key codes
-    // (Cobalt's kSbKeyGamepad*): that's what makes Triangle search, Square
-    // delete and L2/R2 switch the keyboard, as on the console.
+    // (Cobalt's kSbKeyGamepad*). Triangle searches (a space inside search),
+    // Square deletes, L1/R1 change video and L2/R2 seek in the player and
+    // jump 4 keys on the keyboard, as on the console.
     const uint GamepadSquare = 0x8002, GamepadTriangle = 0x8003, GamepadL2 = 0x8006, GamepadR2 = 0x8007;
-
-    // A key code that opened YouTube's search here, remembered for next time.
-    uint? _searchKey;
 
     async Task SendToTvAsync(CdpPage page, PadAction action, Hotkey keys)
     {
         switch (action)
         {
             case PadAction.Search when App.SearchKey.Trim().Length == 0:
-                if (await InSearchAsync(page)) await PressGamepadAsync(page, GamepadTriangle);
-                else await OpenSearchAsync(page);
+                await PressGamepadAsync(page, GamepadTriangle);
                 return;
             case PadAction.Option:
                 await PressGamepadAsync(page, GamepadSquare);
                 return;
-            case PadAction.PageUp or PadAction.PageDown when await InSearchAsync(page):
-                await PressGamepadAsync(page, action == PadAction.PageUp ? GamepadL2 : GamepadR2);
+            case PadAction.PageUp or PadAction.PageDown:
+                // On the home and browse pages L2 starts voice search, which
+                // only shows a microphone error on a PC: leave them out there.
+                var href = await page.EvaluateAsync("location.href") ?? "";
+                if (href.Contains("watch", StringComparison.OrdinalIgnoreCase) ||
+                    href.Contains("search", StringComparison.OrdinalIgnoreCase))
+                    await PressGamepadAsync(page, action == PadAction.PageUp ? GamepadL2 : GamepadR2);
                 return;
             default:
                 await PressAsync(page, keys);
                 return;
         }
-    }
-
-    static async Task<bool> InSearchAsync(CdpPage page) =>
-        (await page.EvaluateAsync("location.href"))?.Contains("search", StringComparison.OrdinalIgnoreCase) == true;
-
-    // Tries what a console sends first, then a TV remote's search key, then
-    // the keyboard's S, and keeps the first that gets to the search screen.
-    async Task OpenSearchAsync(CdpPage page)
-    {
-        uint[] ways = { GamepadTriangle, CdpKeys.BrowserSearch, 0x53 };
-        if (_searchKey is { } known) ways = ways.Where(w => w != known).Prepend(known).ToArray();
-        foreach (var way in ways)
-        {
-            if (way == 0x53) await page.PressAsync("s", "KeyS", 0x53, 0, "s");
-            else await PressGamepadAsync(page, way);
-            for (int i = 0; i < 8; i++)
-            {
-                await Task.Delay(100);
-                if (await InSearchAsync(page))
-                {
-                    if (_searchKey != way) _log.Write($"{App}: key 0x{way:X} opens search.");
-                    _searchKey = way;
-                    return;
-                }
-            }
-        }
-        _log.Write($"{App}: no key opened search (page at {await page.EvaluateAsync("location.href")}).");
     }
 
     static readonly Hotkey AltLeft = new(KeyModifiers.Alt, 0x25);
