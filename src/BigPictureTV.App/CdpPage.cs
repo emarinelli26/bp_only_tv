@@ -109,6 +109,9 @@ sealed class CdpPage : IDisposable
 
     public Task GoBackAsync() => SendAsync("Runtime.evaluate", new JsonObject { ["expression"] = "history.back()" });
 
+    /// <summary>Runs a line of JavaScript in the page.</summary>
+    public Task EvaluateAsync(string expression) => SendAsync("Runtime.evaluate", new JsonObject { ["expression"] = expression });
+
     public Task BringToFrontAsync() => SendAsync("Page.bringToFront", null);
 
     /// <summary>Presses and releases a key in the page. <paramref name="modifiers"/>: Alt 1, Ctrl 2, Meta 4, Shift 8.</summary>

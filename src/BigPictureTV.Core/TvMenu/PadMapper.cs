@@ -40,6 +40,12 @@ public sealed class PadMapper
         (GamepadButtons.Start, PadAction.PlayPause),
         (GamepadButtons.LB, PadAction.Previous),
         (GamepadButtons.RB, PadAction.Next),
+    };
+
+    // Triggers repeat while held too (rewind/fast forward, scroll), a bit slower.
+    public static readonly TimeSpan TriggerRepeatEvery = TimeSpan.FromMilliseconds(250);
+    static readonly (GamepadButtons Button, PadAction Action)[] Triggers =
+    {
         (GamepadButtons.LT, PadAction.PageUp),
         (GamepadButtons.RT, PadAction.PageDown),
     };
@@ -53,8 +59,8 @@ public sealed class PadMapper
     };
 
     GamepadButtons _previous;
-    PadAction? _direction;
-    DateTime _nextRepeat;
+    PadAction? _direction, _trigger;
+    DateTime _nextRepeat, _nextTriggerRepeat;
 
     /// <summary>Call with the buttons held now (stick pushes count as the cross). Returns what happened since the last call.</summary>
     public List<PadAction> Update(GamepadButtons pressed, DateTime now)
@@ -68,6 +74,26 @@ public sealed class PadMapper
         if (!chord)
             foreach (var (button, action) in Presses)
                 if (down.HasFlag(button)) actions.Add(action);
+
+        PadAction? trigger = null;
+        if (!chord)
+            foreach (var (button, action) in Triggers)
+                if (pressed.HasFlag(button)) { trigger = action; break; }
+        if (trigger == null)
+        {
+            _trigger = null;
+        }
+        else if (trigger != _trigger)
+        {
+            _trigger = trigger;
+            _nextTriggerRepeat = now + RepeatDelay;
+            actions.Add(trigger.Value);
+        }
+        else if (now >= _nextTriggerRepeat)
+        {
+            _nextTriggerRepeat = now + TriggerRepeatEvery;
+            actions.Add(trigger.Value);
+        }
 
         // One direction at a time; the first pressed wins until let go.
         PadAction? direction = null;

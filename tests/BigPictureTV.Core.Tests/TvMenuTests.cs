@@ -120,6 +120,19 @@ public class TvMenuTests
     }
 
     [Fact]
+    public void TriggersRepeatWhileHeld()
+    {
+        var mapper = new PadMapper();
+        Assert.Equal(new[] { PadAction.PageDown }, mapper.Update(GamepadButtons.RT, T0));
+        Assert.Empty(mapper.Update(GamepadButtons.RT, T0 + PadMapper.RepeatDelay - TimeSpan.FromMilliseconds(1)));
+        Assert.Equal(new[] { PadAction.PageDown }, mapper.Update(GamepadButtons.RT, T0 + PadMapper.RepeatDelay));
+        Assert.Equal(new[] { PadAction.PageDown },
+            mapper.Update(GamepadButtons.RT, T0 + PadMapper.RepeatDelay + PadMapper.TriggerRepeatEvery));
+        Assert.Empty(mapper.Update(GamepadButtons.None, T0.AddSeconds(2)));
+        Assert.Equal(new[] { PadAction.PageUp }, mapper.Update(GamepadButtons.LT, T0.AddSeconds(3)));
+    }
+
+    [Fact]
     public void ATapOfTheMenuButtonFiresOnRelease()
     {
         var tap = new TapDetector();

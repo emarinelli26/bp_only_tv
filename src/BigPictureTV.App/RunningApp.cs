@@ -130,7 +130,11 @@ sealed class RunningApp : IDisposable
         if (keys == null) return;
         if (Page is { } page)
         {
-            if (keys.Value == AltLeft) _ = Quiet(page.GoBackAsync()); // browser shortcut, not a page key
+            // YouTube TV ignores the remote's search key from a PC; its search
+            // screen is a page of its own, so go there.
+            if (action == PadAction.Search && TvInterface && App.SearchKey.Trim().Length == 0)
+                _ = Quiet(page.EvaluateAsync("if (!location.hash.startsWith('#/search')) location.hash = '#/search'"));
+            else if (keys.Value == AltLeft) _ = Quiet(page.GoBackAsync()); // browser shortcut, not a page key
             else if (CdpKeys.For(keys.Value) is { } k) _ = Quiet(page.PressAsync(k.Key, k.Code, k.VirtualKey, k.Modifiers, k.Text));
             return;
         }
