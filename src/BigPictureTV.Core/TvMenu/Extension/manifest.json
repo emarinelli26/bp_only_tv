@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "TV menu navigation",
+  "version": "1.0",
+  "description": "Moves a focus box between links and buttons with the arrow keys, for the BigPictureTV TV menu.",
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["spatial-nav.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

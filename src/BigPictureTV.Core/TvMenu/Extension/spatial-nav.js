@@ -1,12 +1,10 @@
 // Moves a visible focus box between the links and buttons of any web page
-// with the controller's cross, like on a TV app. Injected by the app into
-// the pages of the TV menu (never into the user's own browser). Each call
-// returns true if it handled the press, or false to let the page get the
-// real key instead (a playing video, text being edited, an embedded player).
-//
-// It runs in a world of its own, out of the page's sight (anti-bot checks,
-// like Cloudflare's, look for anything unusual), and takes commands as a
-// "tvnav" event on the document, answering in a data-tvnav attribute.
+// with the arrow keys the controller's cross sends, like on a TV app. Part of
+// a small extension the app loads only into the browser profiles of the TV
+// menu (never the user's own browser). As an extension it runs apart from the
+// page's scripts, so anti-bot checks like Cloudflare's don't see it. Keys it
+// doesn't need (a playing video, text being edited, an embedded player) go
+// on to the page untouched.
 (() => {
   if (window.__tvNavLoaded || window.top !== window) return;
   window.__tvNavLoaded = true;
@@ -145,7 +143,7 @@
   }
 
   function accept() {
-    if (pageWants('accept')) return false;
+    if (pageWants('accept') || isText(document.activeElement)) return false; // Enter in a text box submits it
     if (!valid(current)) return false;
     if (current.tagName === 'IFRAME') {
       current.focus(); // keys go to the embedded player from now on
@@ -184,13 +182,17 @@
   }
 
   const commands = {
-    up: () => move('up'), down: () => move('down'), left: () => move('left'), right: () => move('right'),
-    accept, search,
+    ArrowUp: () => move('up'), ArrowDown: () => move('down'), ArrowLeft: () => move('left'), ArrowRight: () => move('right'),
+    Enter: accept, F2: search, // F2: the controller's Y
   };
-  document.addEventListener('tvnav', e => {
-    const command = commands[e.detail];
+  addEventListener('keydown', e => {
+    const command = commands[e.key];
+    if (!command || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.isComposing || checking()) return;
     let handled = false;
-    try { handled = !!command && !checking() && command(); } catch (err) { handled = false; }
-    document.documentElement.setAttribute('data-tvnav', handled ? '1' : '0');
-  });
+    try { handled = command(); } catch (err) { handled = false; }
+    if (handled) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }
+  }, true);
 })();

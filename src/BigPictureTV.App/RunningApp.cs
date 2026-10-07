@@ -83,9 +83,6 @@ sealed class RunningApp : IDisposable
         old?.Dispose();
     }
 
-    /// <summary>Connects to the page the first time the controller is used; null once started.</summary>
-    public Func<Task>? ConnectLater { get; set; }
-
     public void Attach(CdpPage page)
     {
         Page = page;
@@ -132,20 +129,10 @@ sealed class RunningApp : IDisposable
         if (!IsWeb) return;
         var keys = KeysFor(action);
         if (keys == null) return;
-        if (Page == null && ConnectLater is { } connect)
-        {
-            ConnectLater = null;
-            Queue(async () =>
-            {
-                await connect();
-                if (Page is { } connected) await SendToPageAsync(connected, action, keys.Value);
-            });
-            return;
-        }
         if (Page is { } page)
         {
             if (TvInterface) Queue(() => SendToTvAsync(page, action, keys.Value));
-            else Queue(() => SendToPageAsync(page, action, keys.Value));
+            else Queue(() => PressAsync(page, keys.Value));
             return;
         }
         if (keys.Value.Key == KeySender.VK_MEDIA_PLAY_PAUSE)
@@ -168,15 +155,6 @@ sealed class RunningApp : IDisposable
     {
         if (keys == AltLeft) return page.GoBackAsync(); // browser shortcut, not a page key
         return CdpKeys.For(keys) is { } k ? page.PressAsync(k.Key, k.Code, k.VirtualKey, k.Modifiers, k.Text) : Task.CompletedTask;
-    }
-
-    // Other pages: the injected spatial navigation moves the focus box, and
-    // whatever it leaves to the page (a playing video, a text box) gets the key.
-    static async Task SendToPageAsync(CdpPage page, PadAction action, Hotkey keys)
-    {
-        if (SpatialNav.Call(action) is { } call && await page.EvaluateAsync(call) == "true") return;
-        if (action == PadAction.Search && keys.Key == CdpKeys.BrowserSearch) return; // nothing to search with
-        await PressAsync(page, keys);
     }
 
     static Task PressGamepadAsync(CdpPage page, uint key) => page.PressAsync("Unidentified", "", (int)key, 0);
@@ -228,7 +206,7 @@ sealed class RunningApp : IDisposable
         PadAction.Right => Press(0x27),
         PadAction.Accept => Press(0x0D),
         PadAction.Back => Hotkey.ParseAny(App.BackKey) ?? AltLeft,
-        PadAction.Search => Hotkey.ParseAny(App.SearchKey) ?? Press(CdpKeys.BrowserSearch),
+        PadAction.Search => Hotkey.ParseAny(App.SearchKey) ?? Press(TvInterface ? CdpKeys.BrowserSearch : 0x71), // F2: the extension's search
         PadAction.PlayPause => Press(KeySender.VK_MEDIA_PLAY_PAUSE),
         PadAction.Previous => TvInterface ? Press(CdpKeys.MediaPrevious) : new Hotkey(KeyModifiers.Shift, 0x09),
         PadAction.Next => TvInterface ? Press(CdpKeys.MediaNext) : Press(0x09),

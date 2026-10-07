@@ -167,9 +167,11 @@ sealed class TvSession : IDisposable
             BrowserProcesses.Close(name, profile, _log);
             File.Delete(Path.Combine(profile, "DevToolsActivePort")); // so we read the new one
             // Only TV pages get the DevTools channel: Cloudflare's check (on
-            // Crunchyroll) never passes while the browser has it open.
-            string channel = app.UserAgent.Trim().Length > 0 ? " --remote-debugging-port=0" : "";
-            var start = new ProcessStartInfo(browser, BrowserCommand.Arguments(app, profile) + channel)
+            // Crunchyroll) never passes while the browser has it open. The
+            // others get the navigation extension instead.
+            string extension = Path.Combine(AppPaths.DataDir, "Browser", "Extension");
+            SpatialNav.Write(extension);
+            var start = new ProcessStartInfo(browser, BrowserCommand.Arguments(app, profile, extension))
             {
                 UseShellExecute = false,
             };
@@ -204,10 +206,6 @@ sealed class TvSession : IDisposable
             {
                 await page.PretendToBeTvAsync(app.App.UserAgent.Trim());
                 await page.NavigateAsync(app.App.Target.Trim()); // load it again, now as a TV
-            }
-            else
-            {
-                await page.InjectIsolatedAsync(SpatialNav.Script, SpatialNav.World); // the cross moves between links and buttons
             }
             app.Attach(page);
             _log.Write($"Connected to the page of {app.App}.");
@@ -259,7 +257,7 @@ sealed class TvSession : IDisposable
 
             if (app.App.UserAgent.Trim().Length == 0)
             {
-                _log.Write($"{app.App} opened without DevTools; the controller types keys.");
+                _log.Write($"{app.App} opened without DevTools; the controller types keys, the extension moves the focus.");
                 return;
             }
             await AttachPageAsync(app);

@@ -19,7 +19,8 @@ public static class BrowserCommand
         return Path.Combine(dataDir, "Browser", folder);
     }
 
-    public static string Arguments(TvApp app, string profileDir)
+    /// <param name="extensionDir">The navigation extension (see <see cref="SpatialNav"/>), for pages without a TV interface.</param>
+    public static string Arguments(TvApp app, string profileDir, string? extensionDir = null)
     {
         var args = new List<string>
         {
@@ -29,7 +30,17 @@ public static class BrowserCommand
             "--hide-crash-restore-bubble",
             "--start-fullscreen",
         };
-        if (app.UserAgent.Trim().Length > 0) args.Add(Quote("--user-agent=" + app.UserAgent.Trim()));
+        if (app.UserAgent.Trim().Length > 0)
+        {
+            args.Add(Quote("--user-agent=" + app.UserAgent.Trim()));
+            args.Add("--remote-debugging-port=0"); // the app drives TV pages through DevTools (CdpPage)
+        }
+        else if (extensionDir != null)
+        {
+            // Browsers based on Chrome 137+ ignore --load-extension unless told otherwise.
+            args.Add(Quote("--load-extension=" + extensionDir));
+            args.Add("--disable-features=DisableLoadExtensionCommandLineSwitch");
+        }
         if (app.Arguments.Trim().Length > 0) args.Add(app.Arguments.Trim());
         args.Add(Quote("--app=" + app.Target.Trim()));
         return string.Join(" ", args);

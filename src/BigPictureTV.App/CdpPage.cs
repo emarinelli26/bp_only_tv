@@ -105,23 +105,6 @@ sealed class CdpPage : IDisposable
         });
     }
 
-    /// <summary>
-    /// Runs a script in an isolated world of the page (its own globals, the
-    /// same DOM), now and in every page it loads later. The page's scripts
-    /// can't see it.
-    /// </summary>
-    public async Task InjectIsolatedAsync(string script, string world)
-    {
-        await SendAsync("Page.enable", null); // without it, scripts for later pages don't run in a named world
-        await SendAsync("Page.addScriptToEvaluateOnNewDocument", new JsonObject { ["source"] = script, ["worldName"] = world });
-        var tree = await SendAsync("Page.getFrameTree", null);
-        string? frame = (string?)tree?["frameTree"]?["frame"]?["id"];
-        if (frame == null) return;
-        var created = await SendAsync("Page.createIsolatedWorld", new JsonObject { ["frameId"] = frame, ["worldName"] = world });
-        if (created?["executionContextId"] is { } context)
-            await SendAsync("Runtime.evaluate", new JsonObject { ["expression"] = script, ["contextId"] = context.GetValue<int>() });
-    }
-
     public Task NavigateAsync(string url) => SendAsync("Page.navigate", new JsonObject { ["url"] = url });
 
     public Task GoBackAsync() => SendAsync("Runtime.evaluate", new JsonObject { ["expression"] = "history.back()" });

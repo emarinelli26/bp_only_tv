@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="TvMenu\spatial-nav.js" LogicalName="spatial-nav.js" />
+    <EmbeddedResource Include="TvMenu\Extension\*" LogicalName="extension/%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

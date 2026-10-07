@@ -120,11 +120,32 @@ public class TvMenuTests
     }
 
     [Fact]
-    public void TheSpatialNavigationScriptShipsWithTheApp()
+    public void TheNavigationExtensionShipsWithTheApp()
     {
-        Assert.Contains("document.addEventListener('tvnav'", SpatialNav.Script);
-        Assert.Contains("detail: 'left'", SpatialNav.Call(PadAction.Left));
-        Assert.Null(SpatialNav.Call(PadAction.PlayPause));
+        Assert.Contains("\"spatial-nav.js\"", SpatialNav.Read("manifest.json"));
+        Assert.Contains("addEventListener('keydown'", SpatialNav.Read("spatial-nav.js"));
+        var dir = Path.Combine(Path.GetTempPath(), $"bptv-ext-{Guid.NewGuid():N}");
+        try
+        {
+            SpatialNav.Write(dir);
+            Assert.True(File.Exists(Path.Combine(dir, "manifest.json")));
+            Assert.True(File.Exists(Path.Combine(dir, "spatial-nav.js")));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void OnlyTvPagesGetDevToolsAndTheOthersTheExtension()
+    {
+        var tv = TvApp.Defaults().First(a => a.Name == "YouTube");
+        var plain = new TvApp { Name = "X", Kind = TvAppKind.Web, Target = "https://example.com" };
+        Assert.Contains("--remote-debugging-port=0", BrowserCommand.Arguments(tv, "p", "ext"));
+        Assert.DoesNotContain("--load-extension", BrowserCommand.Arguments(tv, "p", "ext"));
+        Assert.DoesNotContain("--remote-debugging-port", BrowserCommand.Arguments(plain, "p", "ext"));
+        Assert.Contains("\"--load-extension=ext\"", BrowserCommand.Arguments(plain, "p", "ext"));
     }
 
     [Fact]
