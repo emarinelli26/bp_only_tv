@@ -30,6 +30,7 @@ public sealed class TrayApp : IDisposable
     readonly Timer _timer;
     readonly HotkeyService _hotkeys;
     readonly GamepadService _gamepad;
+    readonly TvSession _tvMenu;
     bool _testing;
     DateTime _hotkeyQuietUntil;
     readonly Timer _updateTimer = new() { Interval = 60_000 };
@@ -79,7 +80,9 @@ public sealed class TrayApp : IDisposable
         var ui = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
         _gamepad = new GamepadService(log, () => ui.Post(_ => OnToggleShortcut(), null));
         ApplyCombo();
+        _tvMenu = new TvSession(log, _gamepad, ui, EnterTvForMenu, LeaveTvFromMenu, OpenBigPicture);
         BuildMenu();
+        WriteMenuTilesOnce();
 
         // First look a minute after starting, then once a day.
         _updateTimer.Tick += (_, _) => { _updateTimer.Interval = 24 * 60 * 60 * 1000; CheckForUpdates(); };
@@ -107,6 +110,8 @@ public sealed class TrayApp : IDisposable
             WpfDialogs.ActivateSettings();
             return;
         }
+        // The menu tiles may have been edited by hand in settings.json; keep those edits.
+        _settings.TvMenuApps = AppSettings.Load(AppPaths.SettingsFile, _log).TvMenuApps;
         // Off while the window is open, so pressing it in the shortcut box
         // records it instead of switching displays.
         _hotkeys.SetToggle(null);
@@ -179,9 +184,37 @@ public sealed class TrayApp : IDisposable
     void OnToggleShortcut()
     {
         if (_testing || DateTime.UtcNow < _hotkeyQuietUntil) return;
-        if (_settings.ShortcutOpensBigPicture && _controller.Mode == DisplayMode.Desktop) OpenBigPicture();
+        if (_settings.ShortcutOpensTvMenu) _tvMenu.Toggle();
+        else if (_settings.ShortcutOpensBigPicture && _controller.Mode == DisplayMode.Desktop) OpenBigPicture();
         else Toggle();
         _hotkeyQuietUntil = DateTime.UtcNow.AddSeconds(1.5);
+    }
+
+    // So the TV menu tiles show up in settings.json, ready to be edited by hand.
+    void WriteMenuTilesOnce()
+    {
+        try
+        {
+            if (File.Exists(AppPaths.SettingsFile) && !File.ReadAllText(AppPaths.SettingsFile).Contains("\"TvMenuApps\""))
+                _settings.Save(AppPaths.SettingsFile);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _log.Write($"Writing the TV menu tiles to the settings failed: {e.Message}");
+        }
+    }
+
+    (bool Ok, bool Switched) EnterTvForMenu()
+    {
+        if (_controller.Mode != DisplayMode.Desktop) return (true, false);
+        Toggle();
+        bool onTv = _controller.Mode != DisplayMode.Desktop;
+        return (onTv, onTv);
+    }
+
+    void LeaveTvFromMenu()
+    {
+        if (_controller.Mode != DisplayMode.Desktop) Toggle();
     }
 
     /// <summary>Switches to the TV first, then opens Big Picture, so Steam starts on the TV.</summary>
@@ -329,7 +362,10 @@ public sealed class TrayApp : IDisposable
     {
         try
         {
-            _controller.Tick(_probe.IsOpen(), DateTime.UtcNow);
+            // An app opened from the TV menu counts as Big Picture, so the
+            // TV stays on while it runs even if Big Picture is hidden.
+            bool open = _probe.IsOpen() || (_tvMenu.Active && _controller.Mode != DisplayMode.Desktop);
+            _controller.Tick(open, DateTime.UtcNow);
         }
         catch (Exception e)
         {
@@ -414,6 +450,10 @@ public sealed class TrayApp : IDisposable
         var openBp = new ToolStripMenuItem(S.OpenBigPicture);
         openBp.Click += (_, _) => OpenBigPicture();
         menu.Items.Add(openBp);
+
+        var tvMenu = new ToolStripMenuItem(S.TvMenuOpen);
+        tvMenu.Click += (_, _) => _tvMenu.Open();
+        menu.Items.Add(tvMenu);
 
         var pause = new ToolStripMenuItem(S.PauseAutomatic) { Checked = _controller.Paused };
         pause.Click += (_, _) => { _controller.SetPaused(!_controller.Paused); UpdateIcon(); };
@@ -500,6 +540,7 @@ public sealed class TrayApp : IDisposable
         _timer.Stop();
         _updateTimer.Dispose();
         _hotkeys.Dispose();
+        _tvMenu.Dispose();
         _gamepad.Dispose();
         try { _controller.Shutdown(); }
         catch (Exception e) { _log.Write($"Restoring the desktop on exit failed: {e.Message}"); }

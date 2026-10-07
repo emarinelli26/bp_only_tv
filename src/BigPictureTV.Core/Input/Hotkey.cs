@@ -74,7 +74,13 @@ public readonly record struct Hotkey(KeyModifiers Modifiers, uint Key)
     }
 
     /// <summary>Reads "Ctrl+Alt+F12" (any case, spaces allowed). Null if it isn't a valid combination.</summary>
-    public static Hotkey? Parse(string? text)
+    public static Hotkey? Parse(string? text) => ParseAny(text) is { IsValid: true } hotkey ? hotkey : null;
+
+    /// <summary>
+    /// Like <see cref="Parse"/>, but a single key such as "Esc" is fine too:
+    /// for keys the app sends, not shortcuts it listens for.
+    /// </summary>
+    public static Hotkey? ParseAny(string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return null;
         var mods = KeyModifiers.None;
@@ -93,9 +99,8 @@ public readonly record struct Hotkey(KeyModifiers Modifiers, uint Key)
             key = KeyFromName(part);
             if (key == null) return null;
         }
-        if (key == null) return null;
-        var hotkey = new Hotkey(mods, key.Value);
-        return hotkey.IsValid ? hotkey : null;
+        if (key == null || ModifierKeys.Contains(key.Value)) return null;
+        return new Hotkey(mods, key.Value);
     }
 
     static uint? KeyFromName(string name)

@@ -32,7 +32,8 @@ public static class DiagnosticReport
         sb.AppendLine("Settings:");
         sb.AppendLine($"  Layout: {settings.Layout}; grace: {settings.GraceSeconds} s; desktop when hidden: {settings.DesktopWhenBigPictureHidden}");
         sb.AppendLine($"  Shortcut: {(settings.Hotkey.Length > 0 ? settings.Hotkey : "off")}; controller combo: {(settings.ControllerCombo.Length > 0 ? settings.ControllerCombo : "off")}");
-        sb.AppendLine($"  Sound to TV: {settings.SwitchAudio}; shortcut opens Big Picture: {settings.ShortcutOpensBigPicture}");
+        sb.AppendLine($"  Sound to TV: {settings.SwitchAudio}; shortcut opens Big Picture: {settings.ShortcutOpensBigPicture}; TV menu: {settings.ShortcutOpensTvMenu}");
+        sb.AppendLine($"  TV menu tiles: {string.Join(", ", settings.TvMenuApps.Select(a => $"{a} ({a.Kind})"))}");
         sb.AppendLine($"  Extra programs: {(settings.ExtraProcesses.Count > 0 ? string.Join(", ", settings.ExtraProcesses) : "none")}");
         sb.AppendLine($"  Big Picture titles: {string.Join(", ", settings.BigPictureTitles)}");
         sb.AppendLine();

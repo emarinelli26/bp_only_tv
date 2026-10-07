@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using BigPictureTV.Core.TvMenu;
 
 namespace BigPictureTV.Core;
 
@@ -67,6 +68,18 @@ public sealed class AppSettings
 
     /// <summary>The keyboard shortcut and controller combo also open Big Picture when switching to the TV.</summary>
     public bool ShortcutOpensBigPicture { get; set; }
+
+    /// <summary>
+    /// The keyboard shortcut and controller combo open the TV menu (switching
+    /// to the TV first) instead of just switching. Wins over <see cref="ShortcutOpensBigPicture"/>.
+    /// </summary>
+    public bool ShortcutOpensTvMenu { get; set; } = true;
+
+    /// <summary>Tiles of the TV menu, in order.</summary>
+    public List<TvApp> TvMenuApps { get; set; } = TvApp.Defaults();
+
+    /// <summary>Browser for web tiles (Edge or Chrome). Empty: Microsoft Edge, which comes with Windows.</summary>
+    public string BrowserPath { get; set; } = "";
 
     /// <summary>Look for a new version on GitHub now and then, and say so (never installs anything).</summary>
     public bool CheckForUpdates { get; set; } = true;

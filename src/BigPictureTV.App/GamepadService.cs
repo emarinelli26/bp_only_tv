@@ -16,6 +16,7 @@ sealed class GamepadService : IDisposable
     const int MaxControllers = 4;
     const uint ERROR_SUCCESS = 0;
     const byte TriggerThreshold = 128;
+    const short StickThreshold = 16000; // about half way
     static readonly TimeSpan PollEvery = TimeSpan.FromMilliseconds(33);
     static readonly TimeSpan ProbeEvery = TimeSpan.FromSeconds(2);
 
@@ -34,6 +35,13 @@ sealed class GamepadService : IDisposable
 
     /// <summary>Buzz the controller when the combo fires. Safe to set from any thread.</summary>
     public bool Rumble { get; set; }
+
+    /// <summary>
+    /// Called on the watcher thread with the buttons held across all
+    /// controllers, on every read while one is connected; left stick pushes
+    /// count as the cross. Null: nobody listens. Safe to set from any thread.
+    /// </summary>
+    public Action<GamepadButtons>? Listener { get; set; }
 
     /// <summary>Buttons held right now across all controllers, or null if none is connected.</summary>
     public GamepadButtons? Pressed => _pressed < 0 ? null : (GamepadButtons)_pressed;
@@ -58,10 +66,11 @@ sealed class GamepadService : IDisposable
             if (probe) nextProbe = now + ProbeEvery;
 
             int pressed = -1;
+            var stick = GamepadButtons.None;
             for (int i = 0; i < MaxControllers && _available; i++)
             {
                 if (!_connected[i] && !probe) continue;
-                var buttons = Read(i);
+                var buttons = Read(i, out var pushed);
                 bool was = _connected[i];
                 _connected[i] = buttons != null;
                 if (was != _connected[i])
@@ -69,6 +78,7 @@ sealed class GamepadService : IDisposable
                 if (buttons == null) continue;
 
                 pressed = (pressed < 0 ? 0 : pressed) | (int)buttons.Value;
+                stick |= pushed;
                 if (_detectors[i].Update(Combo, buttons.Value, now))
                 {
                     _log.Write($"Controller {i + 1}: {GamepadCombo.Format(Combo)} held.");
@@ -77,12 +87,14 @@ sealed class GamepadService : IDisposable
                 }
             }
             _pressed = pressed;
+            if (pressed >= 0) Listener?.Invoke((GamepadButtons)pressed | stick);
             _stop.Wait(pressed < 0 ? ProbeEvery : PollEvery);
         }
     }
 
-    GamepadButtons? Read(int index)
+    GamepadButtons? Read(int index, out GamepadButtons stick)
     {
+        stick = GamepadButtons.None;
         try
         {
             _lastError = XInputGetState((uint)index, out var state);
@@ -90,6 +102,17 @@ sealed class GamepadService : IDisposable
             var buttons = (GamepadButtons)(state.Gamepad.wButtons & ~0x0C00); // drop undocumented bits we reuse
             if (state.Gamepad.bLeftTrigger >= TriggerThreshold) buttons |= GamepadButtons.LT;
             if (state.Gamepad.bRightTrigger >= TriggerThreshold) buttons |= GamepadButtons.RT;
+            var g = state.Gamepad;
+            if (Math.Abs((int)g.sThumbLX) >= Math.Abs((int)g.sThumbLY))
+            {
+                if (g.sThumbLX >= StickThreshold) stick = GamepadButtons.Right;
+                else if (g.sThumbLX <= -StickThreshold) stick = GamepadButtons.Left;
+            }
+            else
+            {
+                if (g.sThumbLY >= StickThreshold) stick = GamepadButtons.Up;
+                else if (g.sThumbLY <= -StickThreshold) stick = GamepadButtons.Down;
+            }
             return buttons;
         }
         catch (DllNotFoundException)

@@ -83,6 +83,14 @@ public sealed class Strings
     public string HotkeyIsEmergency { get; init; } = "";
     public string HotkeyTaken { get; init; } = "";
     public string HotkeyTakenNotify { get; init; } = "";
+    public string TvMenu { get; init; } = "";
+    public string TvMenuOpen { get; init; } = "";
+    public string TvMenuDesktop { get; init; } = "";
+    public string TvMenuHints { get; init; } = "";
+    public string TvMenuOpenFailed { get; init; } = "";
+    public string BrowserNotFound { get; init; } = "";
+    public string TvMenuGroup { get; init; } = "";
+    public string ShortcutOpensTvMenu { get; init; } = "";
 
     static Strings English() => new()
     {
@@ -161,6 +169,14 @@ public sealed class Strings
         HotkeyIsEmergency = "{0} is the emergency shortcut; pick another one.",
         HotkeyTaken = "Another program already uses {0}. Try another combination.",
         HotkeyTakenNotify = "Another program already uses {0}, so the shortcut is off. Pick another one in Settings.",
+        TvMenu = "TV menu",
+        TvMenuOpen = "Open the TV menu",
+        TvMenuDesktop = "Desktop",
+        TvMenuHints = "A  Open      B  Close      In an app, hold View (Back) for a second to come back here",
+        TvMenuOpenFailed = "Couldn't open {0}.",
+        BrowserNotFound = "Microsoft Edge wasn't found. Set another browser as BrowserPath in settings.json.",
+        TvMenuGroup = "TV menu",
+        ShortcutOpensTvMenu = "The keyboard shortcut and the controller combo open the TV menu (YouTube, Crunchyroll, Big Picture…)",
     };
 
     static Strings Spanish() => new()
@@ -240,5 +256,13 @@ public sealed class Strings
         HotkeyIsEmergency = "{0} es el atajo de emergencia; elegí otro.",
         HotkeyTaken = "Otro programa ya usa {0}. Probá otra combinación.",
         HotkeyTakenNotify = "Otro programa ya usa {0}, así que el atajo quedó desactivado. Elegí otro en Ajustes.",
+        TvMenu = "Menú TV",
+        TvMenuOpen = "Abrir el Menú TV",
+        TvMenuDesktop = "Escritorio",
+        TvMenuHints = "A  Abrir      B  Cerrar      En una app, mantené View (Back) un segundo para volver acá",
+        TvMenuOpenFailed = "No se pudo abrir {0}.",
+        BrowserNotFound = "No se encontró Microsoft Edge. Poné otro navegador en BrowserPath dentro de settings.json.",
+        TvMenuGroup = "Menú TV",
+        ShortcutOpensTvMenu = "El atajo de teclado y el combo del mando abren el Menú TV (YouTube, Crunchyroll, Big Picture…)",
     };
 }

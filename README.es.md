@@ -69,6 +69,23 @@ Clic derecho en el ícono → **Ajustes…**
   también usan la TV.
 - Aviso cuando hay una versión nueva.
 
+## Menú TV
+
+El atajo de teclado (o el combo del mando, si lo activaste) abre el **Menú TV** en la TV: mosaicos grandes para YouTube, Crunchyroll, Big Picture y el escritorio. También se abre desde el ícono junto al reloj.
+
+- **En el menú**: cruceta o stick izquierdo para moverte, A para abrir, B para cerrar.
+- **En una página**: se abre en Microsoft Edge a pantalla completa, con un perfil propio por mosaico (las sesiones quedan guardadas y no se mezclan con tu Edge). El mando escribe teclas: cruceta = flechas, A = Enter, B = volver, Start = pausa, LB/RB = elemento anterior/siguiente, LT/RT = subir/bajar página.
+- **Volver al menú**: mantené View (Back) un segundo.
+- **YouTube** usa su interfaz de TV (youtube.com/tv), que ya se maneja con el mando y trae su teclado.
+
+### Desde Big Picture
+
+Agregá `BigPictureTV.exe` como juego que no es de Steam y en sus propiedades poné `--menu` en Opciones de lanzamiento. Al abrirlo desde Big Picture aparece el Menú TV, y Steam lo considera un juego abierto hasta que cerrás el menú. En la configuración del mando de ese acceso directo elegí la plantilla **Gamepad** (no la de escritorio), así Steam no manda teclas además de la app.
+
+### Editar los mosaicos
+
+Están en `%LOCALAPPDATA%\BigPictureTV\settings.json`, en `TvMenuApps`. Cada uno tiene `Name`, `Kind` (`Web`, `Program`, `BigPicture` o `Desktop`), `Target` (dirección o ruta del programa), y opcionales `Arguments`, `UserAgent`, `BackKey` (tecla del botón B, por ejemplo `Esc` o `Alt+Left`), `SearchKey` (botón Y) y `Color` (`#RRGGBB`). Los cambios se ven la próxima vez que abrís el menú.
+
 ## ¿Quedaste atrapado en la TV?
 
 Apretá `Ctrl+Alt+Shift+F12`. Si la app no está abierta, apretá `Win+P` y elegí

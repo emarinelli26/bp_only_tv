@@ -32,7 +32,7 @@ public sealed class SettingsWindow : Window
     readonly List<(RadioButton Button, DisplayInfo Display)> _tvChoices = new();
     readonly RadioButton _tvOnly, _tvPrimary, _duplicate;
     readonly TextBox _grace, _extra;
-    readonly CheckBox _startup, _desktopWhenHidden, _rumble, _switchAudio, _shortcutOpensBp, _checkUpdates;
+    readonly CheckBox _startup, _desktopWhenHidden, _rumble, _switchAudio, _shortcutOpensBp, _shortcutOpensMenu, _checkUpdates;
     readonly ComboBox _audioDevice;
     readonly Expander _advanced;
     readonly IReadOnlyList<AudioDevice> _audioOutputs;
@@ -197,6 +197,14 @@ public sealed class SettingsWindow : Window
         _switchAudio.Checked += (_, _) => _audioDevice.IsEnabled = true;
         _switchAudio.Unchecked += (_, _) => _audioDevice.IsEnabled = false;
         advanced.Children.Add(_audioDevice);
+
+        advanced.Children.Add(Heading(S.TvMenuGroup));
+        _shortcutOpensMenu = new CheckBox
+        {
+            Content = new TextBlock { Text = S.ShortcutOpensTvMenu, TextWrapping = TextWrapping.Wrap },
+            IsChecked = _draft.ShortcutOpensTvMenu,
+        };
+        advanced.Children.Add(_shortcutOpensMenu);
 
         advanced.Children.Add(Heading(S.OpenBigPictureGroup));
         _shortcutOpensBp = new CheckBox
@@ -371,6 +379,7 @@ public sealed class SettingsWindow : Window
         _draft.SwitchAudio = _switchAudio.IsChecked == true;
         _draft.AudioDeviceId = (_audioDevice.SelectedItem as AudioDevice)?.Id ?? "";
         _draft.ShortcutOpensBigPicture = _shortcutOpensBp.IsChecked == true;
+        _draft.ShortcutOpensTvMenu = _shortcutOpensMenu.IsChecked == true;
         _draft.CheckForUpdates = _checkUpdates.IsChecked == true;
         _draft.ControllerCombo = _combo == GamepadButtons.None ? "" : GamepadCombo.Format(_combo);
         _draft.DesktopWhenBigPictureHidden = _desktopWhenHidden.IsChecked == true;
