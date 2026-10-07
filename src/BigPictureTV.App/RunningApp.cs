@@ -150,7 +150,7 @@ sealed class RunningApp : IDisposable
         }
         if (keys.Value.Key == KeySender.VK_MEDIA_PLAY_PAUSE)
             KeySender.Send(keys.Value); // media keys work anywhere
-        else if (keys.Value.Key < 0xE0 && (OwnsForegroundWindow() ||
+        else if (keys.Value.Key < 0xE0 && keys.Value.Key != CdpKeys.BrowserSearch && (OwnsForegroundWindow() ||
                  string.Equals(KeySender.ForegroundProcessName(), BrowserName, StringComparison.OrdinalIgnoreCase)))
             KeySender.Send(keys.Value);
     }

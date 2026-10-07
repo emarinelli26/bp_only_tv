@@ -166,7 +166,10 @@ sealed class TvSession : IDisposable
             // page as a second window and ignore its settings.
             BrowserProcesses.Close(name, profile, _log);
             File.Delete(Path.Combine(profile, "DevToolsActivePort")); // so we read the new one
-            var start = new ProcessStartInfo(browser, BrowserCommand.Arguments(app, profile) + " --remote-debugging-port=0")
+            // Only TV pages get the DevTools channel: Cloudflare's check (on
+            // Crunchyroll) never passes while the browser has it open.
+            string channel = app.UserAgent.Trim().Length > 0 ? " --remote-debugging-port=0" : "";
+            var start = new ProcessStartInfo(browser, BrowserCommand.Arguments(app, profile) + channel)
             {
                 UseShellExecute = false,
             };
@@ -256,9 +259,7 @@ sealed class TvSession : IDisposable
 
             if (app.App.UserAgent.Trim().Length == 0)
             {
-                // Not a TV page: stay out of it until the controller is used,
-                // so security checks at load time (Cloudflare) see a plain browser.
-                app.ConnectLater = () => AttachPageAsync(app);
+                _log.Write($"{app.App} opened without DevTools; the controller types keys.");
                 return;
             }
             await AttachPageAsync(app);
