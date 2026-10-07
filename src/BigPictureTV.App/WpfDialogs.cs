@@ -4,6 +4,7 @@ using BigPictureTV.Core;
 using BigPictureTV.Core.Audio;
 using BigPictureTV.Core.Display;
 using BigPictureTV.Core.Input;
+using BigPictureTV.Core.TvMenu;
 
 namespace BigPictureTV.App;
 
@@ -39,4 +40,7 @@ static class WpfDialogs
     }
 
     public static void ShowTestCountdown() => new TestDialog().ShowDialog();
+
+    /// <summary>The TV menu, made once and kept (hidden) for the rest of the run.</summary>
+    public static ITvMenuView CreateTvMenu() => new TvMenuWindow();
 }

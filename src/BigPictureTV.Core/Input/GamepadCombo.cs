@@ -50,7 +50,13 @@ public static class GamepadCombo
         string.Join("+", Order.Where(b => buttons.HasFlag(b)));
 
     /// <summary>Reads "Back+Start+LB" (any case; View/Select and Menu also work). Null if not a valid combo.</summary>
-    public static GamepadButtons? Parse(string? text)
+    public static GamepadButtons? Parse(string? text) => ParseAny(text) is { } b && IsValid(b) ? b : null;
+
+    /// <summary>
+    /// Like <see cref="Parse"/>, but one button is fine too, and PlayStation
+    /// names work (Share, Options, L3, R3). Null if empty or unknown.
+    /// </summary>
+    public static GamepadButtons? ParseAny(string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return null;
         var buttons = GamepadButtons.None;
@@ -58,8 +64,14 @@ public static class GamepadCombo
         {
             string name = raw.Trim().ToLowerInvariant() switch
             {
-                "select" or "view" => "Back",
-                "menu" => "Start",
+                "select" or "view" or "share" or "create" => "Back",
+                "menu" or "options" => "Start",
+                "l1" => "LB",
+                "r1" => "RB",
+                "l2" => "LT",
+                "r2" => "RT",
+                "l3" => "LS",
+                "r3" => "RS",
                 var n => n,
             };
             if (!Enum.TryParse<GamepadButtons>(name, ignoreCase: true, out var b) || b == GamepadButtons.None ||
@@ -67,7 +79,7 @@ public static class GamepadCombo
                 return null;
             buttons |= b;
         }
-        return IsValid(buttons) ? buttons : null;
+        return buttons;
     }
 }
 
@@ -77,8 +89,8 @@ public sealed class ComboDetector
     DateTime? _since;
     bool _fired;
 
-    /// <returns>True the moment the combo has been held for <see cref="GamepadCombo.Hold"/>.</returns>
-    public bool Update(GamepadButtons combo, GamepadButtons pressed, DateTime now)
+    /// <returns>True the moment the combo has been held for <paramref name="hold"/> (default <see cref="GamepadCombo.Hold"/>).</returns>
+    public bool Update(GamepadButtons combo, GamepadButtons pressed, DateTime now, TimeSpan? hold = null)
     {
         if (combo == GamepadButtons.None || (pressed & combo) != combo)
         {
@@ -87,7 +99,7 @@ public sealed class ComboDetector
             return false;
         }
         _since ??= now;
-        if (_fired || now - _since.Value < GamepadCombo.Hold) return false;
+        if (_fired || now - _since.Value < (hold ?? GamepadCombo.Hold)) return false;
         _fired = true; // again only after letting go
         return true;
     }

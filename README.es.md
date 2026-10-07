@@ -59,15 +59,34 @@ Clic derecho en el ícono → **Ajustes…**
 **Opciones avanzadas:**
 
 - **Sonido:** pasar también el sonido a la TV, y devolverlo después.
-- **Combo del mando** (desactivado por defecto): mantener botones de un mando
-  tipo Xbox 1,5 s para cambiar. Tocá **Grabar** y mantenelos, por ejemplo los
-  dos sticks (`LS+RS`). Evitá Back, Start y Home: los mandos los usan para sus
+- **Combo del mando** (desactivado por defecto): uno o varios botones juntos
+  para cambiar, desde un toque rápido hasta mantenerlos 5 s (1,5 s por
+  defecto). Tocá **Grabar**, apretalos y soltalos, por ejemplo los dos sticks
+  (`LS+RS`). Evitá Back, Start y Home: los mandos los usan para sus
   propios atajos (un GameSir Nova Lite cambia de modo con Back+Start+LB).
 - Que el atajo y el combo del mando también abran Big Picture.
 - Si salir de Big Picture sin cerrarlo vuelve al escritorio.
 - Cuánto esperar después de cerrar Big Picture, y programas (emuladores) que
   también usan la TV.
 - Aviso cuando hay una versión nueva.
+
+## Menú TV
+
+Un toque al botón **Share/View** del mando (o el atajo de teclado) abre el **Menú TV** en la TV, desde cualquier lado: el escritorio, Big Picture o un juego. Tiene mosaicos grandes para YouTube, Crunchyroll, Big Picture y el escritorio. También se abre desde el ícono junto al reloj. Los botones (uno o varios, con un toque o mantenidos hasta 5 s) se pueden cambiar (o apagar) en Ajustes > Opciones avanzadas > Menú TV.
+
+- **En el menú**: cruceta o stick izquierdo para moverte, A para abrir, B para volver.
+- **Como en una consola**: volver al menú no cierra la app. Queda abierta detrás, el mosaico dice "Abierta", A vuelve a ella y X la cierra. Puede haber varias abiertas a la vez (por ejemplo música mientras jugás). Si vas al escritorio, se minimizan.
+- **En una página**: se abre en Microsoft Edge a pantalla completa, con un perfil propio por mosaico (las sesiones quedan guardadas y no se mezclan con tu Edge). La app controla la página directamente: cruceta = flechas, A = Enter, B = volver, Y = buscar, Start = pausa. En YouTube los botones hacen lo mismo que en la app de PS5: LB/RB = video anterior/siguiente, LT/RT = retroceder/adelantar, Y/Triángulo abre la búsqueda (y adentro pone un espacio), X/Cuadrado borra, y en el teclado LT/RT saltan de a 4 teclas; en otras páginas, como Crunchyroll, una extensión chica que se carga solo en los perfiles del Menú TV hace que la cruceta mueva un recuadro naranja entre links y botones, A abre el elegido, Y va al buscador de la página, LB/RB = elemento anterior/siguiente y LT/RT = subir/bajar página. Dentro de un reproductor de video, la cruceta va al reproductor. Con un video en la página, LT/RT atrasan y adelantan 10 s y X/Cuadrado pone el reproductor a pantalla completa, donde la cruceta adelanta o atrasa y A pausa.
+- **YouTube** usa su interfaz de TV (youtube.com/tv), que ya se maneja con el mando y trae su teclado.
+- **Mandos**: Xbox, PlayStation (DualShock 4, DualSense), Switch y otros.
+
+### Desde Big Picture
+
+Agregá `BigPictureTV.exe` como juego que no es de Steam y en sus propiedades poné `--menu` en Opciones de lanzamiento. Al abrirlo desde Big Picture aparece el Menú TV, y Steam lo considera un juego abierto hasta que cerrás el menú. En la configuración del mando de ese acceso directo elegí la plantilla **Gamepad** (no la de escritorio), así Steam no manda teclas además de la app.
+
+### Editar los mosaicos
+
+Están en `%LOCALAPPDATA%\BigPictureTV\settings.json`, en `TvMenuApps`. Cada uno tiene `Name`, `Kind` (`Web`, `Program`, `BigPicture` o `Desktop`), `Target` (dirección o ruta del programa), y opcionales `Arguments`, `UserAgent`, `BackKey` (tecla del botón B, por ejemplo `Esc` o `Alt+Left`), `SearchKey` (botón Y) y `Color` (`#RRGGBB`). Los cambios se ven la próxima vez que abrís el menú.
 
 ## ¿Quedaste atrapado en la TV?
 

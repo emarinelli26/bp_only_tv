@@ -28,6 +28,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- SDL2.dll, for PlayStation, Switch and other controllers XInput doesn't see. -->
+    <PackageReference Include="Ultz.Native.SDL" Version="2.32.10" />
+    <!-- Finds the browser window a TV menu tile opened, by its profile folder. -->
+    <PackageReference Include="System.Management" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\BigPictureTV.Core\BigPictureTV.Core.csproj" />
   </ItemGroup>
 

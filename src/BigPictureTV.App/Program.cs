@@ -9,15 +9,26 @@ namespace BigPictureTV.App;
 public static class Program
 {
     [STAThread]
-    public static int Main()
+    public static int Main(string[] args)
     {
+        bool menu = Array.Exists(args, a => string.Equals(a, "--menu", StringComparison.OrdinalIgnoreCase));
         Directory.CreateDirectory(AppPaths.DataDir);
         var log = new FileLog(AppPaths.LogFile, console: false);
 
         // Same name the PowerShell script and bptv use, so only one of them
         // ever drives the displays.
         using var mutex = new Mutex(false, @"Local\BigPictureTV");
-        if (!mutex.WaitOne(0))
+        bool alone = mutex.WaitOne(0);
+        if (menu)
+        {
+            // Only asks the app next to the clock (started here if needed) for the TV menu.
+            if (alone) mutex.ReleaseMutex();
+            string exe = Environment.ProcessPath ?? Application.ExecutablePath;
+            if (MenuSignal.RequestAndWait(exe, appRunning: !alone)) return 0;
+            log.Write("--menu: couldn't reach BigPictureTV.");
+            return 1;
+        }
+        if (!alone)
         {
             MessageBox.Show(Strings.Current.AlreadyRunning, "BigPictureTV",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);

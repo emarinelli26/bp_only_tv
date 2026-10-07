@@ -32,7 +32,7 @@ public sealed class SettingsWindow : Window
     readonly List<(RadioButton Button, DisplayInfo Display)> _tvChoices = new();
     readonly RadioButton _tvOnly, _tvPrimary, _duplicate;
     readonly TextBox _grace, _extra;
-    readonly CheckBox _startup, _desktopWhenHidden, _rumble, _switchAudio, _shortcutOpensBp, _checkUpdates;
+    readonly CheckBox _startup, _desktopWhenHidden, _rumble, _switchAudio, _shortcutOpensBp, _shortcutOpensMenu, _checkUpdates;
     readonly ComboBox _audioDevice;
     readonly Expander _advanced;
     readonly IReadOnlyList<AudioDevice> _audioOutputs;
@@ -40,12 +40,7 @@ public sealed class SettingsWindow : Window
     readonly TextBox _hotkeyBox;
     readonly TextBlock _hotkeyMessage;
     Hotkey? _hotkey;
-    readonly TextBox _comboBox;
-    readonly TextBlock _comboMessage;
-    readonly System.Windows.Threading.DispatcherTimer _comboTimer = new() { Interval = TimeSpan.FromMilliseconds(50) };
-    GamepadButtons _combo;
-    GamepadButtons _comboSeen;
-    DateTime _comboSeenSince, _comboDeadline;
+    readonly BindingEditor _combo, _menuButton;
 
     public AppSettings Result => _draft;
     public bool StartWithWindows => _startup.IsChecked == true;
@@ -153,31 +148,18 @@ public sealed class SettingsWindow : Window
 
         // Controller combo.
         advanced.Children.Add(Heading(S.ComboGroup));
-        _combo = GamepadCombo.Parse(_draft.ControllerCombo) ?? GamepadButtons.None;
-        var comboRow = new StackPanel { Orientation = Orientation.Horizontal };
-        _comboBox = new TextBox { IsReadOnly = true, Width = 220 };
-        comboRow.Children.Add(_comboBox);
-        var record = Button(S.ComboRecord);
-        record.Click += (_, _) => StartComboCapture();
-        comboRow.Children.Add(record);
-        var noCombo = Button(S.ComboNone);
-        noCombo.Click += (_, _) => { StopComboCapture(); _combo = GamepadButtons.None; _comboMessage!.Text = ""; ShowCombo(); };
-        comboRow.Children.Add(noCombo);
-        advanced.Children.Add(comboRow);
-        _comboMessage = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = System.Windows.Media.Brushes.Firebrick };
-        advanced.Children.Add(_comboMessage);
+        _combo = new BindingEditor(GamepadCombo.ParseAny(_draft.ControllerCombo) ?? GamepadButtons.None,
+            _draft.ControllerComboHold, _controllerButtons);
+        advanced.Children.Add(_combo);
         advanced.Children.Add(new TextBlock
         {
-            Text = string.Format(S.ComboHint, GamepadCombo.Hold.TotalSeconds),
+            Text = S.ComboHint,
             FontSize = 12,
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,
         });
         _rumble = new CheckBox { Content = S.ComboRumble, IsChecked = _draft.ControllerRumble, Margin = new Thickness(0, 6, 0, 0) };
         advanced.Children.Add(_rumble);
-        _comboTimer.Tick += (_, _) => ComboCaptureTick();
-        Closed += (_, _) => _comboTimer.Stop();
-        ShowCombo();
 
         // The rest of the advanced options.
         advanced.Children.Add(Heading(S.AudioGroup));
@@ -197,6 +179,19 @@ public sealed class SettingsWindow : Window
         _switchAudio.Checked += (_, _) => _audioDevice.IsEnabled = true;
         _switchAudio.Unchecked += (_, _) => _audioDevice.IsEnabled = false;
         advanced.Children.Add(_audioDevice);
+
+        advanced.Children.Add(Heading(S.TvMenuGroup));
+        _shortcutOpensMenu = new CheckBox
+        {
+            Content = new TextBlock { Text = S.ShortcutOpensTvMenu, TextWrapping = TextWrapping.Wrap },
+            IsChecked = _draft.ShortcutOpensTvMenu,
+        };
+        advanced.Children.Add(_shortcutOpensMenu);
+        advanced.Children.Add(new TextBlock { Text = S.MenuButtonLabel, Margin = new Thickness(0, 6, 0, 4), TextWrapping = TextWrapping.Wrap });
+        _menuButton = new BindingEditor(GamepadCombo.ParseAny(_draft.ControllerMenuButton) ?? GamepadButtons.None,
+            _draft.ControllerMenuHold, _controllerButtons);
+        advanced.Children.Add(_menuButton);
+        Closed += (_, _) => { _combo.Stop(); _menuButton.Stop(); };
 
         advanced.Children.Add(Heading(S.OpenBigPictureGroup));
         _shortcutOpensBp = new CheckBox
@@ -283,58 +278,6 @@ public sealed class SettingsWindow : Window
         }
     }
 
-    void ShowCombo() => _comboBox.Text = _combo == GamepadButtons.None ? S.HotkeyOff : GamepadCombo.Format(_combo);
-
-    // Recording: wait until the same buttons (two or more) stay held for a second.
-    void StartComboCapture()
-    {
-        if (_controllerButtons() == null)
-        {
-            _comboMessage.Text = S.ComboNoController;
-            return;
-        }
-        _comboMessage.Text = "";
-        _comboBox.Text = S.ComboRecording;
-        _comboSeen = GamepadButtons.None;
-        _comboSeenSince = DateTime.UtcNow;
-        _comboDeadline = DateTime.UtcNow.AddSeconds(10);
-        _comboTimer.Start();
-    }
-
-    void StopComboCapture()
-    {
-        _comboTimer.Stop();
-        ShowCombo();
-    }
-
-    void ComboCaptureTick()
-    {
-        var now = DateTime.UtcNow;
-        var pressed = _controllerButtons();
-        if (pressed == null)
-        {
-            StopComboCapture();
-            _comboMessage.Text = S.ComboNoController;
-            return;
-        }
-        if (pressed.Value != _comboSeen)
-        {
-            _comboSeen = pressed.Value;
-            _comboSeenSince = now;
-        }
-        else if (GamepadCombo.IsValid(_comboSeen) && now - _comboSeenSince >= TimeSpan.FromSeconds(1))
-        {
-            _combo = _comboSeen;
-            StopComboCapture();
-            return;
-        }
-        if (now > _comboDeadline)
-        {
-            StopComboCapture();
-            _comboMessage.Text = S.ComboTimeout;
-        }
-    }
-
     void RunTest()
     {
         _testMessage.Text = "";
@@ -371,8 +314,14 @@ public sealed class SettingsWindow : Window
         _draft.SwitchAudio = _switchAudio.IsChecked == true;
         _draft.AudioDeviceId = (_audioDevice.SelectedItem as AudioDevice)?.Id ?? "";
         _draft.ShortcutOpensBigPicture = _shortcutOpensBp.IsChecked == true;
+        _draft.ShortcutOpensTvMenu = _shortcutOpensMenu.IsChecked == true;
+        _combo.Stop();
+        _menuButton.Stop();
+        _draft.ControllerMenuButton = GamepadCombo.Format(_menuButton.Buttons);
+        _draft.ControllerMenuHold = _menuButton.HoldSeconds;
         _draft.CheckForUpdates = _checkUpdates.IsChecked == true;
-        _draft.ControllerCombo = _combo == GamepadButtons.None ? "" : GamepadCombo.Format(_combo);
+        _draft.ControllerCombo = GamepadCombo.Format(_combo.Buttons);
+        _draft.ControllerComboHold = _combo.HoldSeconds;
         _draft.DesktopWhenBigPictureHidden = _desktopWhenHidden.IsChecked == true;
         _draft.ExtraProcesses = BigPictureWatcher.NormalizeProcessNames(new[] { _extra.Text }).ToList();
         _draft.FirstRunDone = true;

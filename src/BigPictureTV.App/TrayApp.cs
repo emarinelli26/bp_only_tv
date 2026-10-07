@@ -30,9 +30,12 @@ public sealed class TrayApp : IDisposable
     readonly Timer _timer;
     readonly HotkeyService _hotkeys;
     readonly GamepadService _gamepad;
+    readonly TvSession _tvMenu;
     bool _testing;
     DateTime _hotkeyQuietUntil;
     readonly Timer _updateTimer = new() { Interval = 60_000 };
+    readonly Timer _handleTimer = new() { Interval = 30_000 };
+    int _userObjectsLogged;
     (string Tag, string Url)? _update;
     string? _balloonUrl;
     readonly string _exePath = Environment.ProcessPath ?? Application.ExecutablePath;
@@ -77,9 +80,16 @@ public sealed class TrayApp : IDisposable
         ApplyHotkey();
 
         var ui = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
-        _gamepad = new GamepadService(log, () => ui.Post(_ => OnToggleShortcut(), null));
+        _gamepad = new GamepadService(log, () => ui.Post(_ => OnToggleShortcut(), null), () => ui.Post(_ => OnMenuButton(), null));
         ApplyCombo();
+        _tvMenu = new TvSession(log, _gamepad, ui, EnterTvForMenu, LeaveTvFromMenu, OpenBigPicture,
+            () => ButtonsName(GamepadCombo.ParseAny(_settings.ControllerMenuButton) ?? GamepadButtons.None));
         BuildMenu();
+        WriteMenuTilesOnce();
+
+        _handleTimer.Tick += (_, _) => WatchHandles();
+        _handleTimer.Start();
+        WatchHandles();
 
         // First look a minute after starting, then once a day.
         _updateTimer.Tick += (_, _) => { _updateTimer.Interval = 24 * 60 * 60 * 1000; CheckForUpdates(); };
@@ -107,10 +117,13 @@ public sealed class TrayApp : IDisposable
             WpfDialogs.ActivateSettings();
             return;
         }
+        // The menu tiles may have been edited by hand in settings.json; keep those edits.
+        _settings.TvMenuApps = AppSettings.Load(AppPaths.SettingsFile, _log).TvMenuApps;
         // Off while the window is open, so pressing it in the shortcut box
         // records it instead of switching displays.
         _hotkeys.SetToggle(null);
         _gamepad.Combo = GamepadButtons.None;
+        _gamepad.MenuButton = GamepadButtons.None;
         try
         {
             var result = WpfDialogs.ShowSettings(_settings, _display.ListDisplays(), firstRun,
@@ -168,20 +181,93 @@ public sealed class TrayApp : IDisposable
     void ApplyCombo()
     {
         _gamepad.Rumble = _settings.ControllerRumble;
-        var combo = GamepadCombo.Parse(_settings.ControllerCombo) ?? GamepadButtons.None;
+        _gamepad.MenuHold = Math.Clamp(_settings.ControllerMenuHold, 0, BindingDetector.MaxHoldSeconds);
+        _gamepad.ComboHold = Math.Clamp(_settings.ControllerComboHold, 0, BindingDetector.MaxHoldSeconds);
+        var menuButton = GamepadCombo.ParseAny(_settings.ControllerMenuButton) ?? GamepadButtons.None;
+        if (menuButton != _gamepad.MenuButton)
+        {
+            _gamepad.MenuButton = menuButton;
+            _log.Write(menuButton == GamepadButtons.None ? "Controller menu button off." : $"Controller menu button: {GamepadCombo.Format(menuButton)} ({_gamepad.MenuHold} s).");
+        }
+        var combo = GamepadCombo.ParseAny(_settings.ControllerCombo) ?? GamepadButtons.None;
         if (combo == _gamepad.Combo) return;
         _gamepad.Combo = combo;
-        _log.Write(combo == GamepadButtons.None ? "Controller combo off." : $"Controller combo: {GamepadCombo.Format(combo)}.");
+        _log.Write(combo == GamepadButtons.None ? "Controller combo off." : $"Controller combo: {GamepadCombo.Format(combo)} ({_gamepad.ComboHold} s).");
     }
+
+    // Windows allows a program 10,000 windows, menus, icons and the like; at
+    // the limit anything that needs a new one fails and the app closed. Keep
+    // an eye on the count so a leak shows in the log long before that, and
+    // turn off the newest suspect (the PlayStation/Switch controller reader)
+    // if it keeps growing.
+    void WatchHandles()
+    {
+        int user = GuiResources.UserObjects, gdi = GuiResources.GdiObjects;
+        if (_userObjectsLogged == 0 || user > _userObjectsLogged + 300)
+        {
+            _log.Write($"Windows objects in use: {user} USER, {gdi} GDI.");
+            _userObjectsLogged = user;
+        }
+        if (user > 4000 && _gamepad.ReadsOtherControllers)
+        {
+            _log.Write("Too many Windows objects in use; stopping the PlayStation/Switch controller reader to find out if it's the cause.");
+            _gamepad.DropOtherControllers();
+        }
+    }
+
+    void OnMenuButton()
+    {
+        if (_testing || WpfDialogs.SettingsOpen) return;
+        _tvMenu.Toggle();
+    }
+
+    /// <summary>How to call controller buttons on screen, with PlayStation names next to Xbox ones.</summary>
+    internal static string ButtonsName(GamepadButtons buttons) => buttons switch
+    {
+        GamepadButtons.None => "",
+        GamepadButtons.Back => S.MenuButtonBack,
+        GamepadButtons.Start => S.MenuButtonStart,
+        GamepadButtons.LS => S.MenuButtonLS,
+        GamepadButtons.RS => S.MenuButtonRS,
+        _ => GamepadCombo.Format(buttons),
+    };
 
     // Switching displays takes a moment; a second press in the meantime
     // (or right after) would undo the first.
     void OnToggleShortcut()
     {
         if (_testing || DateTime.UtcNow < _hotkeyQuietUntil) return;
-        if (_settings.ShortcutOpensBigPicture && _controller.Mode == DisplayMode.Desktop) OpenBigPicture();
+        if (_settings.ShortcutOpensTvMenu) _tvMenu.Toggle();
+        else if (_settings.ShortcutOpensBigPicture && _controller.Mode == DisplayMode.Desktop) OpenBigPicture();
         else Toggle();
         _hotkeyQuietUntil = DateTime.UtcNow.AddSeconds(1.5);
+    }
+
+    // So the TV menu tiles show up in settings.json, ready to be edited by hand.
+    void WriteMenuTilesOnce()
+    {
+        try
+        {
+            if (File.Exists(AppPaths.SettingsFile) && !File.ReadAllText(AppPaths.SettingsFile).Contains("\"TvMenuApps\""))
+                _settings.Save(AppPaths.SettingsFile);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _log.Write($"Writing the TV menu tiles to the settings failed: {e.Message}");
+        }
+    }
+
+    (bool Ok, bool Switched) EnterTvForMenu()
+    {
+        if (_controller.Mode != DisplayMode.Desktop) return (true, false);
+        Toggle();
+        bool onTv = _controller.Mode != DisplayMode.Desktop;
+        return (onTv, onTv);
+    }
+
+    void LeaveTvFromMenu()
+    {
+        if (_controller.Mode != DisplayMode.Desktop) Toggle();
     }
 
     /// <summary>Switches to the TV first, then opens Big Picture, so Steam starts on the TV.</summary>
@@ -269,7 +355,8 @@ public sealed class TrayApp : IDisposable
             var displays = _display.ListDisplays();
             var (tv, reason) = TvSelector.Select(displays, _settings);
             string report = DiagnosticReport.Build(UpdateChecker.Current.ToString(3),
-                System.Runtime.InteropServices.RuntimeInformation.OSDescription, displays, tv, reason, _settings,
+                $"{System.Runtime.InteropServices.RuntimeInformation.OSDescription} (app holds {GuiResources.UserObjects} USER, {GuiResources.GdiObjects} GDI objects)",
+                displays, tv, reason, _settings,
                 _controller.Mode, DiagnosticReport.Tail(AppPaths.LogFile, 40));
             Clipboard.SetText(report);
             Notify(S.DiagnosticsCopied, ToolTipIcon.Info);
@@ -329,7 +416,10 @@ public sealed class TrayApp : IDisposable
     {
         try
         {
-            _controller.Tick(_probe.IsOpen(), DateTime.UtcNow);
+            // An app opened from the TV menu counts as Big Picture, so the
+            // TV stays on while it runs even if Big Picture is hidden.
+            bool open = _probe.IsOpen() || (_tvMenu.Active && _controller.Mode != DisplayMode.Desktop);
+            _controller.Tick(open, DateTime.UtcNow);
         }
         catch (Exception e)
         {
@@ -415,6 +505,10 @@ public sealed class TrayApp : IDisposable
         openBp.Click += (_, _) => OpenBigPicture();
         menu.Items.Add(openBp);
 
+        var tvMenu = new ToolStripMenuItem(S.TvMenuOpen);
+        tvMenu.Click += (_, _) => _tvMenu.Open();
+        menu.Items.Add(tvMenu);
+
         var pause = new ToolStripMenuItem(S.PauseAutomatic) { Checked = _controller.Paused };
         pause.Click += (_, _) => { _controller.SetPaused(!_controller.Paused); UpdateIcon(); };
         menu.Items.Add(pause);
@@ -499,7 +593,9 @@ public sealed class TrayApp : IDisposable
         _disposed = true;
         _timer.Stop();
         _updateTimer.Dispose();
+        _handleTimer.Dispose();
         _hotkeys.Dispose();
+        _tvMenu.Dispose();
         _gamepad.Dispose();
         try { _controller.Shutdown(); }
         catch (Exception e) { _log.Write($"Restoring the desktop on exit failed: {e.Message}"); }

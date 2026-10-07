@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using BigPictureTV.Core.TvMenu;
 
 namespace BigPictureTV.Core;
 
@@ -53,6 +54,9 @@ public sealed class AppSettings
     /// </summary>
     public string ControllerCombo { get; set; } = "";
 
+    /// <summary>Seconds to hold <see cref="ControllerCombo"/> (0 to 5; 0 is a quick tap).</summary>
+    public double ControllerComboHold { get; set; } = 1.5;
+
     /// <summary>
     /// Buzz the controller when the combo works. Off by default, as not
     /// every third-party controller handles vibration from outside a game.
@@ -67,6 +71,28 @@ public sealed class AppSettings
 
     /// <summary>The keyboard shortcut and controller combo also open Big Picture when switching to the TV.</summary>
     public bool ShortcutOpensBigPicture { get; set; }
+
+    /// <summary>
+    /// The keyboard shortcut and controller combo open the TV menu (switching
+    /// to the TV first) instead of just switching. Wins over <see cref="ShortcutOpensBigPicture"/>.
+    /// </summary>
+    public bool ShortcutOpensTvMenu { get; set; } = true;
+
+    /// <summary>
+    /// Controller button (or buttons, like "Back+Down") that open and close
+    /// the TV menu from anywhere. "Back" (View on Xbox, Share on PlayStation)
+    /// by default; empty for none.
+    /// </summary>
+    public string ControllerMenuButton { get; set; } = "Back";
+
+    /// <summary>Seconds to hold <see cref="ControllerMenuButton"/> (0 to 5; 0, the default, is a quick tap).</summary>
+    public double ControllerMenuHold { get; set; }
+
+    /// <summary>Tiles of the TV menu, in order.</summary>
+    public List<TvApp> TvMenuApps { get; set; } = TvApp.Defaults();
+
+    /// <summary>Browser for web tiles (Edge or Chrome). Empty: Microsoft Edge, which comes with Windows.</summary>
+    public string BrowserPath { get; set; } = "";
 
     /// <summary>Look for a new version on GitHub now and then, and say so (never installs anything).</summary>
     public bool CheckForUpdates { get; set; } = true;
@@ -94,7 +120,10 @@ public sealed class AppSettings
         if (!File.Exists(file)) return new AppSettings();
         try
         {
-            return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(file), JsonOptions) ?? new AppSettings();
+            var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(file), JsonOptions) ?? new AppSettings();
+            settings.TvMenuApps ??= TvApp.Defaults();
+            TvApp.UpdateUserAgents(settings.TvMenuApps);
+            return settings;
         }
         catch (Exception e) when (e is JsonException or IOException)
         {

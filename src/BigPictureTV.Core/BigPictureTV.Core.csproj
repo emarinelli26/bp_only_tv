@@ -7,4 +7,8 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="TvMenu\Extension\*" LogicalName="extension/%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>

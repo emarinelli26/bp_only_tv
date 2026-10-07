@@ -57,15 +57,19 @@ Right-click the icon → **Settings…**
 **Advanced options:**
 
 - **Sound:** move the sound to the TV too, and back afterwards.
-- **Controller combo** (off by default): hold buttons on an Xbox-style
-  controller for 1.5 s to switch. Press **Record** and hold them, for example
-  both sticks (`LS+RS`). Avoid Back, Start and Home: controllers use those for
+- **Controller combo** (off by default): one button or several pressed together
+  to switch, held from a quick tap up to 5 s (1.5 s by default). Press
+  **Record**, press them and let go, for example both sticks (`LS+RS`). Avoid Back, Start and Home: controllers use those for
   their own shortcuts (a GameSir Nova Lite changes mode with Back+Start+LB).
 - Make the shortcut and the controller combo open Big Picture as well.
 - Whether stepping away from Big Picture goes back to the desktop.
 - How long to wait after Big Picture closes, and programs (emulators) that
   should also use the TV.
 - A notice when a new version is out.
+
+## TV menu
+
+A tap on the controller's **Share/View** button (or the keyboard shortcut) opens the **TV menu** on the TV from anywhere: big tiles for YouTube, Crunchyroll, Big Picture and the desktop. The tray icon opens it too, and the buttons (one or several, tapped or held up to 5 s) can be changed or turned off in Settings. Like on a console, going back to the menu leaves the app running: its tile says "Open", A goes back to it and X closes it. Web tiles open full screen in Microsoft Edge with a profile of their own, and the app drives the page directly like a console app: cross = arrows, A = Enter, B = back, Y = search, Start = pause, and on YouTube the buttons do what they do in the PS5 app: LB/RB = previous/next video, LT/RT = rewind/fast forward, Y/Triangle opens search (a space inside it), X/Square deletes, and on the keyboard LT/RT jump 4 keys (on other pages, like Crunchyroll, a small extension loaded only into the TV menu's browser profiles moves an orange focus box between links and buttons with the cross, A opens the one chosen, Y goes to the page's search, LB/RB move between items and LT/RT scroll; inside an embedded video player the cross goes to the player; with a video on the page, LT/RT go back and forward 10 s and X/Square makes the player fill the window, where the cross seeks and A pauses). Xbox, PlayStation and Switch controllers work. To open it from Big Picture, add `BigPictureTV.exe` as a non-Steam game with `--menu` as its launch option, and give it the Gamepad controller template. Tiles live in `TvMenuApps` in `settings.json`; [README.es.md](README.es.md#menú-tv) describes the fields.
 
 ## Stuck on the TV?
 
