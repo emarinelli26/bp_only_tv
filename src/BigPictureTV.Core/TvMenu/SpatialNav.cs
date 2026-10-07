@@ -9,7 +9,7 @@ namespace BigPictureTV.Core.TvMenu;
 /// </summary>
 public static class SpatialNav
 {
-    public static readonly string[] Files = { "manifest.json", "spatial-nav.js" };
+    public static readonly string[] Files = { "manifest.json", "background.js", "spatial-nav.js", "player.js" };
 
     /// <summary>The extension's files, as shipped with the app.</summary>
     public static string Read(string file)

@@ -22,7 +22,11 @@
     const style = document.createElement('style');
     style.id = '__tvnav-style';
     style.textContent = `.${MARK} { outline: 4px solid #fff !important; outline-offset: 2px !important;
-      box-shadow: 0 0 0 8px #f47521 !important; border-radius: 6px; transition: box-shadow .1s; }`;
+      box-shadow: 0 0 0 8px #f47521 !important; border-radius: 6px; transition: box-shadow .1s; }
+      .__tvnav-full { position: fixed !important; inset: 0 !important; width: 100vw !important; height: 100vh !important;
+        max-width: none !important; max-height: none !important; margin: 0 !important; z-index: 2147483647 !important;
+        background: #000 !important; object-fit: contain; transform: none !important; }
+      .__tvnav-full-page, .__tvnav-full-page body { overflow: hidden !important; }`;
     document.head.appendChild(style);
   }
 
@@ -227,12 +231,72 @@
       !!document.querySelector('#challenge-form, #challenge-running, .cf-turnstile, [name="cf-turnstile-response"]');
   }
 
+  // The video player, which may sit in a frame of another site (Crunchyroll's
+  // does): the biggest video or frame on the page, if it's big enough.
+  function player() {
+    let best = null, bestArea = innerWidth * innerHeight * 0.2;
+    for (const el of document.querySelectorAll('video, iframe')) {
+      if (!shown(el)) continue;
+      const a = area(el);
+      if (a > bestArea) { best = el; bestArea = a; }
+    }
+    return best;
+  }
+
+  // Commands for the player go to every frame of the tab (see player.js).
+  function tell(command) {
+    try { chrome.runtime.sendMessage({ player: command }); } catch (err) { /* extension reloaded */ }
+  }
+
+  // Square: the player fills the window, and again to put it back.
+  const FULL = '__tvnav-full';
+  let full = null;
+  function toggleFull() {
+    if (full) {
+      full.classList.remove(FULL);
+      document.documentElement.classList.remove(FULL + '-page');
+      full = null;
+      return true;
+    }
+    const el = player();
+    if (!el) return false;
+    addStyle();
+    full = el;
+    el.classList.add(FULL);
+    document.documentElement.classList.add(FULL + '-page');
+    if (current) current.classList.remove(MARK);
+    return true;
+  }
+
+  const seek = seconds => () => {
+    if (!player()) return false;
+    tell({ seek: seconds });
+    return true;
+  };
+
+  // While the player fills the window the cross works it, like on a TV.
+  const fullCommands = {
+    ArrowLeft: () => { tell({ seek: -10 }); return true; },
+    ArrowRight: () => { tell({ seek: 10 }); return true; },
+    ArrowUp: () => true, ArrowDown: () => true,
+    Enter: () => { tell({ toggle: true }); return true; },
+    F8: toggleFull, Escape: toggleFull, PageUp: seek(-10), PageDown: seek(10),
+  };
+
   const commands = {
     ArrowUp: () => move('up'), ArrowDown: () => move('down'), ArrowLeft: () => move('left'), ArrowRight: () => move('right'),
     Enter: accept, F2: search, // F2: the controller's Y
+    F8: toggleFull, // the controller's X/Square
+    PageUp: seek(-10), PageDown: seek(10), // LT/RT, when there's a player
   };
+
+  // Square pressed inside the player's frame comes here.
+  chrome.runtime.onMessage.addListener(message => {
+    if (message && message.layout === 'toggle') toggleFull();
+  });
+
   addEventListener('keydown', e => {
-    const command = commands[e.key];
+    const command = (full && document.contains(full) ? fullCommands : commands)[e.key];
     if (!command || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.isComposing || checking()) return;
     let handled = false;
     try { handled = command(); } catch (err) { handled = false; }

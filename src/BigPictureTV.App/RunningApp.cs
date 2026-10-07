@@ -212,6 +212,7 @@ sealed class RunningApp : IDisposable
         PadAction.Next => TvInterface ? Press(CdpKeys.MediaNext) : Press(0x09),
         PadAction.PageUp => TvInterface ? Press(CdpKeys.MediaRewind) : Press(0x21),
         PadAction.PageDown => TvInterface ? Press(CdpKeys.MediaFastForward) : Press(0x22),
+        PadAction.Option => Press(0x77), // F8: the extension's full-window player; on TV pages, Square (see SendToTvAsync)
         _ => null,
     };
 
