@@ -140,13 +140,6 @@ sealed class RunningApp : IDisposable
         if (Page is { } page) _ = Quiet(page.BringToFrontAsync());
     }
 
-    /// <summary>Minimizes its window (going to the desktop); it keeps running, music keeps playing.</summary>
-    public void Minimize()
-    {
-        var window = MainWindow();
-        if (window != IntPtr.Zero) ShowWindow(window, SW_MINIMIZE);
-    }
-
     public bool OwnsForegroundWindow()
     {
         if (SharedProfile) return Window != IntPtr.Zero && KeySender.ForegroundWindow() == Window;

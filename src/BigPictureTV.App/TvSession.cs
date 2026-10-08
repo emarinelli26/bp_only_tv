@@ -39,7 +39,8 @@ sealed class TvSession : IDisposable
     ITvMenuView? _view;
     ITvKeyboardView? _keyboardView;
     ITvVolumeView? _volumeView;
-    readonly Dictionary<int, bool> _musicProcesses = new(); // process id: plays a music tile's sound
+    readonly Dictionary<int, string?> _musicProcesses = new(); // process id: key of the music tile it plays for
+    readonly Dictionary<string, int> _volumeBefore = new(); // music tile key: its volume before the stick moved it
     readonly OnScreenKeyboard _keyboard = new(); // only touched on the UI thread
     volatile bool _menuShown, _keyboardShown;
     volatile RunningApp? _current; // the app in front, driven by the controller
@@ -157,8 +158,9 @@ sealed class TvSession : IDisposable
 
     const float VolumeStep = 0.02f;
 
-    // Only the music's own volume (its slider in Windows' volume mixer), so
-    // games and videos keep theirs; on the sound output card, the PC's.
+    // Only the volume of the music opened from the menu (its slider in
+    // Windows' volume mixer), so games, videos and other apps keep theirs;
+    // on the sound output card, the PC's.
     void ChangeVolume(bool windows, int direction)
     {
         _volumeView ??= WpfDialogs.CreateVolume();
@@ -168,15 +170,42 @@ sealed class TvSession : IDisposable
                 _volumeView.Show(pc.Muted ? S.WindowsVolume + "  🔇" : S.WindowsVolume, pc.Percent);
             return;
         }
-        int? music = AudioOutputs.ChangeAppVolume(IsMusicProcess, direction * VolumeStep);
+        // What each one had, to give it back when it closes.
+        foreach (var app in _running.Values.Where(a => !a.Gone && a.App.IsMusic && !_volumeBefore.ContainsKey(a.Key)))
+            if (AudioOutputs.ChangeAppVolume(pid => MusicTileOf(pid) == app.Key, 0) is { } before)
+                _volumeBefore[app.Key] = before;
+        int? music = AudioOutputs.ChangeAppVolume(pid => MusicTileOf(pid) != null, direction * VolumeStep);
         _volumeView.Show(music == null ? S.NoMusicPlaying : S.MusicVolume, music);
     }
 
-    // Spotify's app (opened from the menu or not), or the browser behind a
-    // music tile (YouTube Music), found by its profile or as a child of it.
-    bool IsMusicProcess(int processId)
+    // Windows keeps an app's volume for the next time it runs, for the whole
+    // program: YouTube Music left low would leave Edge low. So a music tile
+    // gets its volume back before it closes.
+    void RestoreVolume(RunningApp app)
     {
-        if (_musicProcesses.TryGetValue(processId, out bool known)) return known;
+        if (!_volumeBefore.Remove(app.Key, out int before) || app.Gone) return;
+        AudioOutputs.SetAppVolume(pid => MusicTileOf(pid) == app.Key, before);
+        _log.Write($"{app.App}: volume back to {before}%.");
+    }
+
+    // The music tile open from the menu that this process plays for, or null:
+    // the app of a program tile (Spotify) or one of its helpers, or the
+    // browser behind a web tile (YouTube Music), by its profile or as its child.
+    // Not the same program opened by other means, nor the browser's other windows.
+    string? MusicTileOf(int processId)
+    {
+        if (!_musicProcesses.TryGetValue(processId, out string? key))
+        {
+            key = FindMusicTile(processId);
+            _musicProcesses[processId] = key;
+        }
+        return key != null && _running.TryGetValue(key, out var app) && !app.Gone ? key : null;
+    }
+
+    string? FindMusicTile(int processId)
+    {
+        var music = _running.Values.Where(a => !a.Gone && a.App.IsMusic).ToList();
+        if (music.Count == 0) return null;
         string name = "";
         try
         {
@@ -184,15 +213,16 @@ sealed class TvSession : IDisposable
             name = process.ProcessName;
         }
         catch (Exception e) when (e is ArgumentException or InvalidOperationException) { }
-        bool music = MediaSessionPicker.IsMusicApp(name);
-        var webMusic = _running.Values.Where(a => !a.Gone && a.IsWeb && a.App.IsMusic && a.Profile != null).ToList();
-        if (!music && webMusic.Any(a => string.Equals(a.BrowserName, name, StringComparison.OrdinalIgnoreCase)))
+        foreach (var app in music.Where(a => !a.IsWeb))
         {
-            var (commandLine, parent) = BrowserProcesses.Describe(processId);
-            music = webMusic.Any(a => BrowserCommand.UsesProfile(commandLine, a.Profile!) || a.ProcessId == parent);
+            if (app.ProcessId == processId) return app.Key;
+            string own = app.App.ProcessName.Length > 0 ? app.App.ProcessName : Path.GetFileNameWithoutExtension(app.App.Target);
+            if (own.Length > 0 && string.Equals(name, own, StringComparison.OrdinalIgnoreCase)) return app.Key;
         }
-        _musicProcesses[processId] = music;
-        return music;
+        var web = music.Where(a => a.IsWeb && a.Profile != null && string.Equals(a.BrowserName, name, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (web.Count == 0) return null;
+        var (commandLine, parent) = BrowserProcesses.Describe(processId);
+        return web.FirstOrDefault(a => BrowserCommand.UsesProfile(commandLine, a.Profile!) || (a.ProcessId != 0 && a.ProcessId == parent))?.Key;
     }
 
     void ShowAudioOutput()
@@ -497,6 +527,7 @@ sealed class TvSession : IDisposable
     {
         if (!_running.TryGetValue(app.Key, out var known) || !ReferenceEquals(known, app)) return;
         _running.Remove(app.Key);
+        _volumeBefore.Remove(app.Key); // too late to give it back
         app.Dispose();
         _log.Write($"{app.App} was closed.");
         if (!ReferenceEquals(_current, app)) return;
@@ -507,15 +538,27 @@ sealed class TvSession : IDisposable
 
     void CloseApp(string key)
     {
-        if (!_running.Remove(key, out var app)) return;
+        if (!_running.TryGetValue(key, out var app)) return;
+        RestoreVolume(app);
+        _running.Remove(key);
         if (ReferenceEquals(_current, app)) _current = null;
         _log.Write($"Closing {app.App}.");
         app.Close();
         if (_menuShown) ShowMenu(); // redraw without the "open" mark
     }
 
-    // Leaves the menu. Apps opened from it keep running (music keeps playing);
-    // going to the desktop minimizes them so they don't cover it.
+    /// <summary>
+    /// Back on the desktop (from the menu, the shortcut or the tray): leaves
+    /// the menu and closes every app opened from it, music too.
+    /// </summary>
+    public void CloseAll() => Post(() =>
+    {
+        End(toDesktop: false);
+        foreach (var key in _running.Keys.ToList()) CloseApp(key);
+    });
+
+    // Leaves the menu. Apps opened from it keep running (music keeps playing,
+    // Big Picture can be on top); going to the desktop closes them.
     void End(bool toDesktop)
     {
         HideMenu();
@@ -527,7 +570,7 @@ sealed class TvSession : IDisposable
         _signal.MenuClosed();
         _log.Write("TV menu closed.");
         if (!toDesktop) return;
-        foreach (var app in _running.Values) app.Minimize();
+        foreach (var key in _running.Keys.ToList()) CloseApp(key);
         _toDesktop();
     }
 
@@ -672,7 +715,11 @@ sealed class TvSession : IDisposable
     {
         _gamepad.Listener = null;
         _signal.Dispose();
-        foreach (var app in _running.Values) app.Dispose(); // leave them running; just let go
+        foreach (var app in _running.Values)
+        {
+            Guard("Giving the volume back", () => RestoreVolume(app));
+            app.Dispose(); // leave them running; just let go
+        }
         _running.Clear();
     }
 }

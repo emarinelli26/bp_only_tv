@@ -112,49 +112,82 @@ static class AudioOutputs
     /// </summary>
     public static int? ChangeAppVolume(Func<int, bool> isTarget, float delta)
     {
+        int? percent = null;
+        ForAppSessions(isTarget, allOutputs: false, targets =>
+        {
+            // The first one sets the level; the others (a browser can have several) follow it.
+            targets[0].GetMasterVolume(out float level);
+            if (delta != 0)
+            {
+                var context = Guid.Empty;
+                level = Math.Clamp(MathF.Round((level + delta) * 50) / 50, 0, 1);
+                foreach (var volume in targets)
+                {
+                    volume.SetMasterVolume(level, ref context);
+                    if (delta > 0) volume.SetMute(false, ref context);
+                }
+            }
+            percent = (int)MathF.Round(level * 100);
+        });
+        return percent;
+    }
+
+    /// <summary>
+    /// Puts the apps <paramref name="isTarget"/> picks back to <paramref name="percent"/>,
+    /// on every output (they may have moved with the default). Windows keeps
+    /// an app's level for the next time it runs, so a level left low here
+    /// would stay low for the whole browser.
+    /// </summary>
+    public static void SetAppVolume(Func<int, bool> isTarget, int percent)
+    {
+        ForAppSessions(isTarget, allOutputs: true, targets =>
+        {
+            var context = Guid.Empty;
+            foreach (var volume in targets) volume.SetMasterVolume(Math.Clamp(percent / 100f, 0, 1), ref context);
+        });
+    }
+
+    // Runs `act` once per output, with the target apps' sessions on it.
+    static void ForAppSessions(Func<int, bool> isTarget, bool allOutputs, Action<List<ISimpleAudioVolume>> act)
+    {
         try
         {
             var enumerator = (IMMDeviceEnumerator)new MMDeviceEnumerator();
-            if (enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia, out var device) != 0) return null;
-            var iid = typeof(IAudioSessionManager2).GUID;
-            if (device.Activate(ref iid, CLSCTX_ALL, IntPtr.Zero, out var pointer) != 0 || pointer == IntPtr.Zero) return null;
-            try
+            var outputs = new List<IMMDevice>();
+            if (allOutputs)
             {
-                var manager = (IAudioSessionManager2)Marshal.GetObjectForIUnknown(pointer);
-                if (manager.GetSessionEnumerator(out var sessions) != 0) return null;
-                sessions.GetCount(out int count);
-                var targets = new List<ISimpleAudioVolume>();
+                if (enumerator.EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE, out var devices) != 0) return;
+                devices.GetCount(out int count);
                 for (int i = 0; i < count; i++)
-                {
-                    if (sessions.GetSession(i, out var session) != 0 || session == null) continue;
-                    if (session.GetProcessId(out uint pid) != 0 || pid == 0 || !isTarget((int)pid)) continue;
-                    if (session is ISimpleAudioVolume volume) targets.Add(volume);
-                }
-                if (targets.Count == 0) return null;
+                    if (devices.Item(i, out var device) == 0) outputs.Add(device);
+            }
+            else if (enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia, out var main) == 0) outputs.Add(main);
 
-                // The first one sets the level; the others (a browser can have several) follow it.
-                targets[0].GetMasterVolume(out float level);
-                if (delta != 0)
-                {
-                    var context = Guid.Empty;
-                    level = Math.Clamp(MathF.Round((level + delta) * 50) / 50, 0, 1);
-                    foreach (var volume in targets)
-                    {
-                        volume.SetMasterVolume(level, ref context);
-                        if (delta > 0) volume.SetMute(false, ref context);
-                    }
-                }
-                return (int)MathF.Round(level * 100);
-            }
-            finally
+            foreach (var device in outputs)
             {
-                Marshal.Release(pointer);
+                var iid = typeof(IAudioSessionManager2).GUID;
+                if (device.Activate(ref iid, CLSCTX_ALL, IntPtr.Zero, out var pointer) != 0 || pointer == IntPtr.Zero) continue;
+                try
+                {
+                    var manager = (IAudioSessionManager2)Marshal.GetObjectForIUnknown(pointer);
+                    if (manager.GetSessionEnumerator(out var sessions) != 0) continue;
+                    sessions.GetCount(out int count);
+                    var targets = new List<ISimpleAudioVolume>();
+                    for (int i = 0; i < count; i++)
+                    {
+                        if (sessions.GetSession(i, out var session) != 0 || session == null) continue;
+                        if (session.GetProcessId(out uint pid) != 0 || pid == 0 || !isTarget((int)pid)) continue;
+                        if (session is ISimpleAudioVolume volume) targets.Add(volume);
+                    }
+                    if (targets.Count > 0) act(targets);
+                }
+                finally
+                {
+                    Marshal.Release(pointer);
+                }
             }
         }
-        catch (Exception e) when (e is COMException or InvalidCastException)
-        {
-            return null;
-        }
+        catch (Exception e) when (e is COMException or InvalidCastException) { }
     }
 
     static string? NameOf(IMMDevice device)

@@ -229,7 +229,7 @@ public sealed class Strings
         HintWindowsVolume = "Right stick  PC volume",
         MusicVolume = "Music volume",
         WindowsVolume = "PC volume",
-        NoMusicPlaying = "No music app is making sound",
+        NoMusicPlaying = "No music opened from the TV menu is playing",
         KeyboardHints = "A type   X delete   Y space   L2 capitals   R2 symbols   L1/R1 move   Start done   B close",
     };
 
@@ -343,7 +343,7 @@ public sealed class Strings
         HintWindowsVolume = "Stick derecho  Volumen de la PC",
         MusicVolume = "Volumen de la música",
         WindowsVolume = "Volumen de la PC",
-        NoMusicPlaying = "Ninguna app de música está sonando",
+        NoMusicPlaying = "No suena música abierta desde el Menú TV",
         KeyboardHints = "A escribir   X borrar   Y espacio   L2 mayúsculas   R2 símbolos   L1/R1 mover   Start listo   B cerrar",
     };
 }
