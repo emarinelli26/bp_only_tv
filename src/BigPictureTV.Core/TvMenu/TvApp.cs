@@ -13,6 +13,12 @@ public enum TvAppKind
 
     /// <summary>Leaves the TV menu and goes back to the desktop.</summary>
     Desktop,
+
+    /// <summary>
+    /// The game (or any window) that was in front when the menu opened. The
+    /// menu adds this tile on its own, like a console's game card; never saved.
+    /// </summary>
+    Game,
 }
 
 /// <summary>One tile of the TV menu, stored in settings.json.</summary>

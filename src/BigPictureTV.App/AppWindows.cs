@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace BigPictureTV.App;
 
@@ -35,6 +36,37 @@ static class AppWindows
 
     public static bool Exists(IntPtr window) => window != IntPtr.Zero && IsWindow(window);
 
+    /// <summary>Exists and is on screen (minimized counts).</summary>
+    public static bool IsShown(IntPtr window) => Exists(window) && IsWindowVisible(window);
+
+    public static int ProcessOf(IntPtr window)
+    {
+        GetWindowThreadProcessId(window, out uint pid);
+        return (int)pid;
+    }
+
+    public static string TitleOf(IntPtr window)
+    {
+        var text = new StringBuilder(256);
+        return GetWindowText(window, text, text.Capacity) == 0 ? "" : text.ToString();
+    }
+
+    /// <summary>The desktop or the taskbar: nothing to go back to.</summary>
+    public static bool IsShell(IntPtr window)
+    {
+        var name = new StringBuilder(64);
+        GetClassName(window, name, name.Capacity);
+        return name.ToString() is "Progman" or "WorkerW" or "Shell_TrayWnd" or "Shell_SecondaryTrayWnd";
+    }
+
+    /// <summary>Un-minimizes it and brings it to the front.</summary>
+    public static void BringBack(IntPtr window)
+    {
+        if (!Exists(window)) return;
+        if (IsIconic(window)) ShowWindow(window, SW_RESTORE);
+        KeySender.ForceForeground(window);
+    }
+
     /// <summary>True if the window covers its whole display (full screen).</summary>
     public static bool CoversItsScreen(IntPtr window)
     {
@@ -53,6 +85,19 @@ static class AppWindows
     }
 
     const uint WM_CLOSE = 0x0010, MONITOR_DEFAULTTONEAREST = 2;
+    const int SW_RESTORE = 9;
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    static extern int GetWindowText(IntPtr window, StringBuilder text, int max);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    static extern int GetClassName(IntPtr window, StringBuilder name, int max);
+
+    [DllImport("user32.dll")]
+    static extern bool IsIconic(IntPtr window);
+
+    [DllImport("user32.dll")]
+    static extern bool ShowWindow(IntPtr window, int command);
 
     delegate bool EnumWindowsProc(IntPtr window, IntPtr param);
 

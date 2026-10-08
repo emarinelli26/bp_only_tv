@@ -44,6 +44,12 @@ sealed class TvSession : IDisposable
     readonly OnScreenKeyboard _keyboard = new(); // only touched on the UI thread
     volatile bool _menuShown, _keyboardShown;
     volatile RunningApp? _current; // the app in front, driven by the controller
+
+    // The window that was in front when the menu opened from outside it (a
+    // game, Big Picture). A tile goes back to it, like a console's game card.
+    IntPtr _origin;
+    string _originTitle = "";
+    bool _inOrigin; // it is the one in front, not an app from the menu
     bool _session, _switchedHere;
 
     /// <param name="enterTv">Switches to the TV unless already there; Switched is true if it did.</param>
@@ -73,9 +79,10 @@ sealed class TvSession : IDisposable
     public void Toggle() => Guard("The menu button", () =>
     {
         if (!_menuShown) ShowMenu();
-        // Like a console's home button: back to the app in front; with none,
-        // it stays on the menu. Leaving the TV is the Desktop tile's (or B's) job,
-        // so a double press doesn't switch the displays back and forth.
+        // Like a console's home button: back to the game or app in front; with
+        // none, it stays on the menu. Leaving the TV is the Desktop tile's (or
+        // B's) job, so a double press doesn't switch the displays back and forth.
+        else if (_inOrigin && OriginShown) ReturnToOrigin();
         else if (_current is { Gone: false } app) Resume(app);
     });
 
@@ -103,9 +110,12 @@ sealed class TvSession : IDisposable
             _view.AudioRequested += () => Guard("Changing the sound output", NextAudioOutput);
             _view.VolumeRequested += (windows, direction) => Guard("Changing the volume", () => ChangeVolume(windows, direction));
         }
+        if (!_menuShown) NoteOrigin();
         var apps = AppSettings.Load(AppPaths.SettingsFile, _log).TvMenuApps; // picks up hand edits
+        var origin = OriginTile();
+        if (origin != null) apps.Insert(0, origin);
         _menuShown = true;
-        _view.Show(apps, _running.Keys.ToList(), _current?.App, message, _menuButtonName());
+        _view.Show(apps, _running.Keys.ToList(), _inOrigin && origin != null ? origin : _current?.App, message, _menuButtonName());
         ShowAudioOutput();
         if (!_mediaTimer.Enabled)
         {
@@ -113,6 +123,44 @@ sealed class TvSession : IDisposable
             _ = RefreshMediaAsync();
         }
         MemoryTrim.Soon();
+    }
+
+    // Opening the menu over a game (any window that is neither ours, nor an
+    // app from the menu, nor the desktop): remember it, to go back to it.
+    void NoteOrigin()
+    {
+        var front = KeySender.ForegroundWindow();
+        if (!AppWindows.IsShown(front) || AppWindows.ProcessOf(front) == Environment.ProcessId || AppWindows.IsShell(front)) return;
+        if (_running.Values.Any(r => !r.Gone && r.OwnsForegroundWindow()))
+        {
+            _inOrigin = false;
+            return;
+        }
+        string title = AppWindows.TitleOf(front).Trim();
+        if (title.Length == 0) return;
+        if (front != _origin) _log.Write($"TV menu opened over {title}.");
+        _origin = front;
+        _originTitle = title;
+        _inOrigin = true;
+    }
+
+    bool OriginShown => AppWindows.IsShown(_origin);
+
+    TvApp? OriginTile()
+    {
+        if (!OriginShown) return null;
+        string name = _originTitle.Length > 40 ? _originTitle[..39] + "…" : _originTitle;
+        return new TvApp { Kind = TvAppKind.Game, Name = name, Target = _origin.ToString(), Color = "#107C10" };
+    }
+
+    void ReturnToOrigin()
+    {
+        _current = null;
+        _inOrigin = true;
+        HideMenu();
+        HideKeyboard();
+        AppWindows.BringBack(_origin);
+        _log.Write($"Back to {_originTitle}.");
     }
 
     void HideMenu()
@@ -245,12 +293,23 @@ sealed class TvSession : IDisposable
         ShowAudioOutput();
     }
 
-    // B in the menu: back to the app in front, or out of the menu.
+    // B in the menu: back to the game or app in front (with none, to the
+    // game the menu opened over), or out of the menu.
     void Back()
     {
+        if (_inOrigin && OriginShown)
+        {
+            ReturnToOrigin();
+            return;
+        }
         if (_current is { Gone: false } app)
         {
             Resume(app);
+            return;
+        }
+        if (OriginShown)
+        {
+            ReturnToOrigin();
             return;
         }
         End(toDesktop: _switchedHere);
@@ -261,6 +320,11 @@ sealed class TvSession : IDisposable
         if (_running.TryGetValue(app.Key, out var running) && !running.Gone)
         {
             Resume(running);
+            return;
+        }
+        if (app.Kind == TvAppKind.Game)
+        {
+            ReturnToOrigin();
             return;
         }
         _log.Write($"TV menu: opening {app} ({app.Kind}).");
@@ -284,12 +348,14 @@ sealed class TvSession : IDisposable
         _running[app.Key] = started;
         started.Exited += gone => Post(() => OnExited(gone));
         _current = started;
+        _inOrigin = false;
         HideMenu();
     }
 
     void Resume(RunningApp app)
     {
         _current = app;
+        _inOrigin = false;
         HideMenu();
         app.BringToFront();
         _log.Write($"Back to {app.App}.");
@@ -564,6 +630,8 @@ sealed class TvSession : IDisposable
         HideMenu();
         HideKeyboard();
         _current = null;
+        _origin = IntPtr.Zero;
+        _inOrigin = false;
         if (!_session) return;
         _session = false;
         _gamepad.Listener = null;
@@ -593,10 +661,12 @@ sealed class TvSession : IDisposable
             if (_view is { } view) foreach (var action in actions) view.Handle(action);
             return;
         }
-        // The right stick turns the music's volume over any app; the menu
-        // got it above (there, on the sound output it turns the PC's).
+        // The right stick turns the music's volume over an app from the menu
+        // (the menu got it above; there, on the sound output it turns the
+        // PC's). In a game it is the game's.
+        bool overMenuApp = _current is { Gone: false };
         foreach (var action in actions)
-            if (action is PadAction.VolumeUp or PadAction.VolumeDown)
+            if (overMenuApp && action is PadAction.VolumeUp or PadAction.VolumeDown)
                 Post(() => ChangeVolume(windows: false, action == PadAction.VolumeUp ? 1 : -1));
         actions.RemoveAll(a => a is PadAction.VolumeUp or PadAction.VolumeDown);
         if (actions.Count == 0) return;
