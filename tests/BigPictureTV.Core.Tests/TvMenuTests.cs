@@ -131,6 +131,11 @@ public class TvMenuTests
             SpatialNav.Write(dir);
             Assert.True(File.Exists(Path.Combine(dir, "manifest.json")));
             Assert.True(File.Exists(Path.Combine(dir, "spatial-nav.js")));
+            // Every file the manifest names ships, icons included (the store wants a 128 px one).
+            foreach (var named in System.Text.RegularExpressions.Regex.Matches(SpatialNav.Read("manifest.json"), "\"([\\w-]+\\.(?:js|png))\"").Select(m => m.Groups[1].Value))
+                Assert.True(File.Exists(Path.Combine(dir, named)), named);
+            Assert.Equal(new byte[] { 0x89, (byte)'P', (byte)'N', (byte)'G' }, File.ReadAllBytes(Path.Combine(dir, "icon128.png"))[..4]);
+            SpatialNav.Write(dir); // again, unchanged: fine
         }
         finally
         {
