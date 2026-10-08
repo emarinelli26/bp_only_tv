@@ -71,8 +71,11 @@ sealed class TvSession : IDisposable
     /// <summary>The menu button or the shortcut: shows the menu, or leaves it (back to the app in front, if any).</summary>
     public void Toggle() => Guard("The menu button", () =>
     {
-        if (_menuShown) Back();
-        else ShowMenu();
+        if (!_menuShown) ShowMenu();
+        // Like a console's home button: back to the app in front; with none,
+        // it stays on the menu. Leaving the TV is the Desktop tile's (or B's) job,
+        // so a double press doesn't switch the displays back and forth.
+        else if (_current is { Gone: false } app) Resume(app);
     });
 
     void ShowMenu(string? message = null)

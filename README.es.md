@@ -72,7 +72,7 @@ Clic derecho en el ícono → **Ajustes…**
 
 ## Menú TV
 
-Un toque al botón **Share/View** del mando (o el atajo de teclado) abre el **Menú TV** en la TV, desde cualquier lado: el escritorio, Big Picture o un juego. Tiene mosaicos grandes para YouTube, Crunchyroll, Big Picture y el escritorio. También se abre desde el ícono junto al reloj. Los botones (uno o varios, con un toque o mantenidos hasta 5 s) se pueden cambiar (o apagar) en Ajustes > Opciones avanzadas > Menú TV.
+Un toque al botón **Share/View** del mando (o el atajo de teclado) abre el **Menú TV** en la TV, desde cualquier lado: el escritorio, Big Picture o un juego. Tiene mosaicos grandes para YouTube, Crunchyroll, Big Picture y el escritorio. Con el menú abierto, el mismo botón vuelve a la app que estabas usando; si no hay ninguna, el menú queda en pantalla (para volver al escritorio está el mosaico Escritorio o B). También se abre desde el ícono junto al reloj. Los botones (uno o varios, con un toque o mantenidos hasta 5 s) se pueden cambiar (o apagar) en Ajustes > Opciones avanzadas > Menú TV.
 
 - **En el menú**: cruceta o stick izquierdo para moverte, A para abrir, B para volver.
 - **Como en una consola**: volver al menú no cierra la app. Queda abierta detrás, el mosaico dice "Abierta", A vuelve a ella y X la cierra. Puede haber varias abiertas a la vez (por ejemplo música mientras jugás). Si vas al escritorio, se minimizan.

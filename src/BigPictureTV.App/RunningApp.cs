@@ -141,6 +141,9 @@ sealed class RunningApp : IDisposable
         if (!IsWeb) return;
         var keys = KeysFor(action);
         if (keys == null) return;
+        // Only while its window is in front: after Alt+Tab to something else
+        // the controller must not keep moving the page behind it.
+        if (!InFront()) return;
         if (Page is { } page)
         {
             if (TvInterface) Queue(() => SendToTvAsync(page, action, keys.Value));
@@ -149,10 +152,15 @@ sealed class RunningApp : IDisposable
         }
         if (keys.Value.Key == KeySender.VK_MEDIA_PLAY_PAUSE)
             KeySender.Send(keys.Value); // media keys work anywhere
-        else if (keys.Value.Key < 0xE0 && keys.Value.Key != CdpKeys.BrowserSearch && (OwnsForegroundWindow() ||
-                 string.Equals(KeySender.ForegroundProcessName(), BrowserName, StringComparison.OrdinalIgnoreCase)))
+        else if (keys.Value.Key < 0xE0 && keys.Value.Key != CdpKeys.BrowserSearch)
             KeySender.Send(keys.Value);
     }
+
+    // Its own window is in front; until its process is found (right after
+    // opening), any window of its browser counts.
+    bool InFront() => Process != null
+        ? OwnsForegroundWindow()
+        : string.Equals(KeySender.ForegroundProcessName(), BrowserName, StringComparison.OrdinalIgnoreCase);
 
     // Page commands run one after another, in the order pressed.
     Task _pageWork = Task.CompletedTask;
