@@ -30,4 +30,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: tv-menu-extension
-          path: publish/tv-menu-extension.zip
+          path: |
+            publish/tv-menu-extension.zip
+            docs/edge-store/logo-300.png
+            docs/edge-store/listing.md
