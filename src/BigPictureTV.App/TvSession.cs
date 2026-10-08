@@ -276,13 +276,17 @@ sealed class TvSession : IDisposable
             return null;
         }
         string profile = BrowserCommand.ProfileDir(AppPaths.DataDir, app);
+        bool shared = BrowserCommand.SharesProfile(app);
         string name = Path.GetFileNameWithoutExtension(browser);
+        HashSet<IntPtr> before = shared ? AppWindows.All() : new();
         try
         {
+            if (shared) AdoptOldProfile(profile, name);
             Directory.CreateDirectory(profile);
             // One window per tile: a copy left from before would take the new
-            // page as a second window and ignore its settings.
-            BrowserProcesses.Close(name, profile, _log);
+            // page as a second window and ignore its settings. On the shared
+            // profile the other tiles' windows stay: they use the same settings.
+            if (!_running.Values.Any(r => !r.Gone && r.Profile == profile)) BrowserProcesses.Close(name, profile, _log);
             File.Delete(Path.Combine(profile, "DevToolsActivePort")); // so we read the new one
             // Only TV pages get the DevTools channel: Cloudflare's check (on
             // Crunchyroll) never passes while the browser has it open. The
@@ -300,9 +304,34 @@ sealed class TvSession : IDisposable
             _log.Write($"Opening {app} failed: {e.Message}");
             return null;
         }
-        var running = new RunningApp(app, _log) { Profile = profile, BrowserName = name, Key = key ?? app.Key };
-        _ = Task.Run(() => ConnectAsync(running));
+        var running = new RunningApp(app, _log) { Profile = profile, BrowserName = name, Key = key ?? app.Key, SharedProfile = shared };
+        _ = Task.Run(() => ConnectAsync(running, before));
         return running;
+    }
+
+    // Plain pages used to have a profile per tile; the first time the shared
+    // one is needed, an old one (with its logins and, on Crunchyroll's, the
+    // navigation extension) becomes it.
+    void AdoptOldProfile(string shared, string browserName)
+    {
+        if (Directory.Exists(shared)) return;
+        var apps = AppSettings.Load(AppPaths.SettingsFile, _log).TvMenuApps;
+        foreach (var old in apps.Where(BrowserCommand.SharesProfile).Select(a => BrowserCommand.NamedProfileDir(AppPaths.DataDir, a))
+                     .OrderByDescending(d => d.EndsWith("crunchyroll", StringComparison.OrdinalIgnoreCase)))
+        {
+            if (!Directory.Exists(old)) continue;
+            try
+            {
+                BrowserProcesses.Close(browserName, old, _log);
+                Directory.Move(old, shared);
+                _log.Write($"The web tiles now share the profile that was {Path.GetFileName(old)}'s.");
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                _log.Write($"Couldn't reuse {old} for the web tiles: {e.Message}");
+            }
+            return;
+        }
     }
 
     async Task AttachPageAsync(RunningApp app)
@@ -354,9 +383,35 @@ sealed class TvSession : IDisposable
         if (!app.Gone && ReferenceEquals(_current, app)) app.BringToFront();
     }
 
+    // On the shared profile the browser was often already running for another
+    // tile: this tile is the window that appeared after it was opened.
+    async Task ClaimWindowAsync(RunningApp app, int browserId, HashSet<IntPtr> before)
+    {
+        for (int i = 0; i < 40 && !app.Gone; i++)
+        {
+            await Task.Delay(250);
+            HashSet<IntPtr> claimed;
+            try { claimed = new HashSet<IntPtr>(_running.Values.Where(r => r != app).Select(r => r.Window)); }
+            catch (InvalidOperationException) { continue; } // the list changed meanwhile (UI thread); try again
+            var window = AppWindows.NewWindowOf(browserId, before, claimed);
+            if (window == IntPtr.Zero) continue;
+            Post(() =>
+            {
+                if (app.Gone || _running.Values.Any(r => r != app && r.Window == window)) return;
+                app.Claim(window);
+                if (!ReferenceEquals(_current, app)) return;
+                app.BringToFront();
+                // A browser already running ignores --start-fullscreen for the new window.
+                if (!AppWindows.CoversItsScreen(window) && KeySender.ForegroundWindow() == window) KeySender.Send(0x7A); // F11
+            });
+            return;
+        }
+        _log.Write($"Didn't find the window of {app.App}.");
+    }
+
     // Finds the browser's main process (to bring it back, minimize it and
     // notice when it closes) and opens the DevTools channel to its page.
-    async Task ConnectAsync(RunningApp app)
+    async Task ConnectAsync(RunningApp app, HashSet<IntPtr> before)
     {
         try
         {
@@ -366,8 +421,10 @@ sealed class TvSession : IDisposable
                 if (found.Count > 0)
                 {
                     foreach (var extra in found.Skip(1)) extra.Dispose();
+                    int pid = found[0].Id;
                     Post(() => { if (!app.Gone) app.Follow(found[0]); else found[0].Dispose(); });
-                    _ = Task.Run(() => FocusWhenShownAsync(app));
+                    if (app.SharedProfile) _ = Task.Run(() => ClaimWindowAsync(app, pid, before));
+                    else _ = Task.Run(() => FocusWhenShownAsync(app));
                     break;
                 }
                 await Task.Delay(500);

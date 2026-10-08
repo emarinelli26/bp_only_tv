@@ -34,6 +34,25 @@ sealed class RunningApp : IDisposable
     /// <summary>Browser profile folder of a web tile.</summary>
     public string? Profile { get; init; }
 
+    /// <summary>
+    /// Its profile is the one plain pages share: the browser shows other
+    /// tiles too, so this tile is its own window (<see cref="Window"/>), not the process.
+    /// </summary>
+    public bool SharedProfile { get; init; }
+
+    /// <summary>On a shared profile, the tile's window once found; zero before.</summary>
+    public IntPtr Window { get; private set; }
+
+    System.Threading.Timer? _windowWatch;
+
+    /// <summary>Takes a window as this tile's; closing it counts as closing the tile.</summary>
+    public void Claim(IntPtr window)
+    {
+        Window = window;
+        _windowWatch?.Dispose();
+        _windowWatch = new System.Threading.Timer(_ => { if (!AppWindows.Exists(Window)) MarkGone(); }, null, 1000, 1000);
+    }
+
     /// <summary>Executable name (no .exe) of the browser of a web tile.</summary>
     public string BrowserName { get; init; } = "";
 
@@ -103,6 +122,7 @@ sealed class RunningApp : IDisposable
 
     void MarkGone()
     {
+        _windowWatch?.Dispose();
         if (_gone) return;
         _gone = true;
         Exited?.Invoke(this);
@@ -129,6 +149,7 @@ sealed class RunningApp : IDisposable
 
     public bool OwnsForegroundWindow()
     {
+        if (SharedProfile) return Window != IntPtr.Zero && KeySender.ForegroundWindow() == Window;
         int front = KeySender.ForegroundProcessId();
         if (front == 0) return false;
         try { return Process != null && front == Process.Id; }
@@ -158,7 +179,7 @@ sealed class RunningApp : IDisposable
 
     // Its own window is in front; until its process is found (right after
     // opening), any window of its browser counts.
-    bool InFront() => Process != null
+    bool InFront() => Process != null || Window != IntPtr.Zero
         ? OwnsForegroundWindow()
         : string.Equals(KeySender.ForegroundProcessName(), BrowserName, StringComparison.OrdinalIgnoreCase);
 
@@ -246,7 +267,15 @@ sealed class RunningApp : IDisposable
     public void Close()
     {
         _gone = true; // closing on purpose: no Exited
+        _windowWatch?.Dispose();
         Page?.Dispose();
+        if (SharedProfile)
+        {
+            // Only its window: the browser goes on with the other tiles (and quits by itself after the last).
+            AppWindows.Close(Window);
+            Dispose();
+            return;
+        }
         var process = Process;
         if (process != null)
         {
@@ -269,6 +298,7 @@ sealed class RunningApp : IDisposable
 
     IntPtr MainWindow()
     {
+        if (SharedProfile) return AppWindows.Exists(Window) ? Window : IntPtr.Zero;
         try
         {
             var process = Process;
@@ -281,6 +311,7 @@ sealed class RunningApp : IDisposable
 
     public void Dispose()
     {
+        _windowWatch?.Dispose();
         Page?.Dispose();
         Process?.Dispose();
     }

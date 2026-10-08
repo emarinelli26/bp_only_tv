@@ -54,10 +54,22 @@ public class TvMenuTests
         Assert.EndsWith("\"--app=https://www.youtube.com/tv\"", args);
 
         var plain = new TvApp { Name = "Mi Página!", Target = "https://example.com/\"x" };
-        Assert.EndsWith(Path.Combine("Browser", "mi-página"), BrowserCommand.ProfileDir("d", plain));
+        Assert.EndsWith(Path.Combine("Browser", "shared"), BrowserCommand.ProfileDir("d", plain));
+        Assert.EndsWith(Path.Combine("Browser", "mi-página"), BrowserCommand.NamedProfileDir("d", plain));
         Assert.DoesNotContain("--user-agent", BrowserCommand.Arguments(plain, "p"));
         Assert.EndsWith("\"--app=https://example.com/x\"", BrowserCommand.Arguments(plain, "p"));
-        Assert.EndsWith(Path.Combine("Browser", "web"), BrowserCommand.ProfileDir("d", new TvApp { Name = "!!" }));
+        Assert.EndsWith(Path.Combine("Browser", "web"), BrowserCommand.NamedProfileDir("d", new TvApp { Name = "!!" }));
+    }
+
+    [Fact]
+    public void PlainPagesShareAProfileButTvPagesAndMusicKeepTheirOwn()
+    {
+        var byName = TvApp.Defaults().ToDictionary(a => a.Name);
+        Assert.True(BrowserCommand.SharesProfile(byName["Crunchyroll"]));
+        Assert.False(BrowserCommand.SharesProfile(byName["YouTube"]));       // TV interface
+        Assert.False(BrowserCommand.SharesProfile(byName["YouTube Music"])); // its own volume
+        Assert.False(BrowserCommand.SharesProfile(byName["Spotify"]));       // a program
+        Assert.EndsWith(Path.Combine("Browser", "youtube-music"), BrowserCommand.ProfileDir("d", byName["YouTube Music"]));
     }
 
     [Theory]
