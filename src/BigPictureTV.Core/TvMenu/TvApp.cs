@@ -13,6 +13,12 @@ public enum TvAppKind
 
     /// <summary>Leaves the TV menu and goes back to the desktop.</summary>
     Desktop,
+
+    /// <summary>
+    /// The game (or any window) that was in front when the menu opened. The
+    /// menu adds this tile on its own, like a console's game card; never saved.
+    /// </summary>
+    Game,
 }
 
 /// <summary>One tile of the TV menu, stored in settings.json.</summary>
@@ -60,6 +66,18 @@ public sealed class TvApp
     /// <summary>Web only: key the controller's Y button sends (search). Empty: none.</summary>
     public string SearchKey { get; set; } = "";
 
+    /// <summary>
+    /// Program only: web page opened instead when the program isn't installed,
+    /// for programs opened through a link like "spotify:".
+    /// </summary>
+    public string Fallback { get; set; } = "";
+
+    /// <summary>
+    /// Program only: name of its process (no .exe), to find it when it was
+    /// opened through a link or a launcher that hands over and quits.
+    /// </summary>
+    public string ProcessName { get; set; } = "";
+
     /// <summary>Tile color as #RRGGBB. Empty: one from the menu's palette.</summary>
     public string Color { get; set; } = "";
 
@@ -69,13 +87,49 @@ public sealed class TvApp
 
     public override string ToString() => Name.Length > 0 ? Name : Kind.ToString();
 
+    /// <summary>A music tile (Spotify, YouTube Music...): the right stick turns its volume.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsMusic => Kind is TvAppKind.Web or TvAppKind.Program &&
+                           (MediaSessionPicker.IsMusicApp(Name) || MediaSessionPicker.IsMusicApp(Target) || MediaSessionPicker.IsMusicApp(ProcessName));
+
     public static List<TvApp> Defaults() => new()
     {
         new() { Name = "YouTube", Target = "https://www.youtube.com/tv", UserAgent = SmartTvUserAgent, BackKey = "Esc", Color = "#C4302B" },
         new() { Name = "Crunchyroll", Target = "https://www.crunchyroll.com", Color = "#F47521" },
+        Spotify(),
+        YouTubeMusic(),
         new() { Name = "Big Picture", Kind = TvAppKind.BigPicture, Color = "#1B2838" },
         new() { Kind = TvAppKind.Desktop, Color = "#3A3F47" },
     };
+
+    // Music keeps playing behind the menu, Big Picture and games. Spotify's
+    // own app if it is installed (pick songs from the phone with Spotify
+    // Connect), else its web player.
+    static TvApp Spotify() => new()
+    {
+        Name = "Spotify", Kind = TvAppKind.Program, Target = "spotify:", Fallback = "https://open.spotify.com",
+        ProcessName = "Spotify", Color = "#1DB954",
+    };
+
+    static TvApp YouTubeMusic() => new() { Name = "YouTube Music", Target = "https://music.youtube.com", Color = "#FF0033" };
+
+    /// <summary>Version of <see cref="Defaults"/>; tiles added since a version reach saved settings once (<see cref="AddNewDefaults"/>).</summary>
+    public const int DefaultsVersion = 1;
+
+    /// <summary>
+    /// Adds the tiles that came with versions after <paramref name="fromVersion"/>
+    /// to tiles saved before them, before the Big Picture tile, unless one
+    /// with the same address is already there.
+    /// </summary>
+    public static void AddNewDefaults(List<TvApp> apps, int fromVersion)
+    {
+        var added = new List<TvApp>();
+        if (fromVersion < 1) added.AddRange(new[] { Spotify(), YouTubeMusic() });
+        added.RemoveAll(n => apps.Any(a => a.Kind == n.Kind && string.Equals(a.Target.Trim(), n.Target, StringComparison.OrdinalIgnoreCase)));
+        if (added.Count == 0) return;
+        int at = apps.FindIndex(a => a.Kind is TvAppKind.BigPicture or TvAppKind.Desktop);
+        apps.InsertRange(at < 0 ? apps.Count : at, added);
+    }
 
     /// <summary>True if this tile can be opened: web pages need an http(s) address, programs a path.</summary>
     public bool IsUsable => Kind switch

@@ -2,7 +2,7 @@ namespace BigPictureTV.Core.Input;
 
 /// <summary>Controller buttons, with XInput's bit values. LT and RT use two bits XInput leaves free.</summary>
 [Flags]
-public enum GamepadButtons : ushort
+public enum GamepadButtons : uint
 {
     None = 0,
     Up = 0x0001,
@@ -21,6 +21,11 @@ public enum GamepadButtons : ushort
     B = 0x2000,
     X = 0x4000,
     Y = 0x8000,
+
+    // Right stick pushed up or down: not buttons, never part of a combo; the
+    // TV menu turns them into volume.
+    RStickUp = 0x10000,
+    RStickDown = 0x20000,
 }
 
 /// <summary>Buttons held together on a controller, stored in the settings as text like "Back+Start+LB".</summary>

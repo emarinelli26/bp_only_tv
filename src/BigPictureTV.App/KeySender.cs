@@ -53,6 +53,9 @@ static class KeySender
 
     public static void Send(uint key) => Send(new Hotkey(KeyModifiers.None, key));
 
+    /// <summary>The window in front, or zero.</summary>
+    public static IntPtr ForegroundWindow() => GetForegroundWindow();
+
     /// <summary>Id of the process that owns the window in front, or 0.</summary>
     public static int ForegroundProcessId()
     {

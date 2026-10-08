@@ -1,7 +1,7 @@
 // Moves a visible focus box between the links and buttons of any web page
-// with the arrow keys the controller's cross sends, like on a TV app. Part of
-// a small extension the app loads only into the browser profiles of the TV
-// menu (never the user's own browser). As an extension it runs apart from the
+// with the arrow keys the controller's cross sends, like on a TV app. It only
+// wakes up in the app windows the TV menu opens; in a normal browser window
+// it does nothing. As an extension it runs apart from the
 // page's scripts, so anti-bot checks like Cloudflare's don't see it. Keys it
 // doesn't need (a playing video, text being edited, an embedded player) go
 // on to the page untouched.
@@ -16,6 +16,10 @@
   ].join(',');
   const MARK = '__tvnav-focus';
   let current = null;
+  let active = false; // in a TV menu window (see background.js)
+  try {
+    chrome.runtime.sendMessage({ tvWindow: true }).then(yes => { active = !!yes; }, () => {});
+  } catch (err) { /* extension reloaded */ }
 
   function addStyle() {
     if (document.getElementById('__tvnav-style') || !document.head) return;
@@ -292,10 +296,11 @@
 
   // Square pressed inside the player's frame comes here.
   chrome.runtime.onMessage.addListener(message => {
-    if (message && message.layout === 'toggle') toggleFull();
+    if (active && message && message.layout === 'toggle') toggleFull();
   });
 
   addEventListener('keydown', e => {
+    if (!active) return;
     const command = (full && document.contains(full) ? fullCommands : commands)[e.key];
     if (!command || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.isComposing || checking()) return;
     let handled = false;

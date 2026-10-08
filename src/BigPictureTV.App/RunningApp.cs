@@ -23,19 +23,50 @@ sealed class RunningApp : IDisposable
     {
         App = app;
         _log = log;
+        Key = app.Key;
     }
 
     public TvApp App { get; }
-    public string Key => App.Key;
+    /// <summary>The tile it was opened from (a web fallback runs under its program tile's key).</summary>
+    public string Key { get; init; } = "";
     public bool IsWeb => App.Kind == TvAppKind.Web;
 
     /// <summary>Browser profile folder of a web tile.</summary>
     public string? Profile { get; init; }
 
+    /// <summary>
+    /// Its profile is the one plain pages share: the browser shows other
+    /// tiles too, so this tile is its own window (<see cref="Window"/>), not the process.
+    /// </summary>
+    public bool SharedProfile { get; init; }
+
+    /// <summary>On a shared profile, the tile's window once found; zero before.</summary>
+    public IntPtr Window { get; private set; }
+
+    System.Threading.Timer? _windowWatch;
+
+    /// <summary>Takes a window as this tile's; closing it counts as closing the tile.</summary>
+    public void Claim(IntPtr window)
+    {
+        Window = window;
+        _windowWatch?.Dispose();
+        _windowWatch = new System.Threading.Timer(_ => { if (!AppWindows.Exists(Window)) MarkGone(); }, null, 1000, 1000);
+    }
+
     /// <summary>Executable name (no .exe) of the browser of a web tile.</summary>
     public string BrowserName { get; init; } = "";
 
     public Process? Process { get; private set; }
+
+    /// <summary>Id of <see cref="Process"/>, or 0.</summary>
+    public int ProcessId
+    {
+        get
+        {
+            try { return Process?.Id ?? 0; }
+            catch (InvalidOperationException) { return 0; }
+        }
+    }
     public CdpPage? Page { get; private set; }
     public bool Gone => _gone;
 
@@ -91,6 +122,7 @@ sealed class RunningApp : IDisposable
 
     void MarkGone()
     {
+        _windowWatch?.Dispose();
         if (_gone) return;
         _gone = true;
         Exited?.Invoke(this);
@@ -108,15 +140,9 @@ sealed class RunningApp : IDisposable
         if (Page is { } page) _ = Quiet(page.BringToFrontAsync());
     }
 
-    /// <summary>Minimizes its window (going to the desktop); it keeps running, music keeps playing.</summary>
-    public void Minimize()
-    {
-        var window = MainWindow();
-        if (window != IntPtr.Zero) ShowWindow(window, SW_MINIMIZE);
-    }
-
     public bool OwnsForegroundWindow()
     {
+        if (SharedProfile) return Window != IntPtr.Zero && KeySender.ForegroundWindow() == Window;
         int front = KeySender.ForegroundProcessId();
         if (front == 0) return false;
         try { return Process != null && front == Process.Id; }
@@ -129,6 +155,9 @@ sealed class RunningApp : IDisposable
         if (!IsWeb) return;
         var keys = KeysFor(action);
         if (keys == null) return;
+        // Only while its window is in front: after Alt+Tab to something else
+        // the controller must not keep moving the page behind it.
+        if (!InFront()) return;
         if (Page is { } page)
         {
             if (TvInterface) Queue(() => SendToTvAsync(page, action, keys.Value));
@@ -137,10 +166,15 @@ sealed class RunningApp : IDisposable
         }
         if (keys.Value.Key == KeySender.VK_MEDIA_PLAY_PAUSE)
             KeySender.Send(keys.Value); // media keys work anywhere
-        else if (keys.Value.Key < 0xE0 && keys.Value.Key != CdpKeys.BrowserSearch && (OwnsForegroundWindow() ||
-                 string.Equals(KeySender.ForegroundProcessName(), BrowserName, StringComparison.OrdinalIgnoreCase)))
+        else if (keys.Value.Key < 0xE0 && keys.Value.Key != CdpKeys.BrowserSearch)
             KeySender.Send(keys.Value);
     }
+
+    // Its own window is in front; until its process is found (right after
+    // opening), any window of its browser counts.
+    bool InFront() => Process != null || Window != IntPtr.Zero
+        ? OwnsForegroundWindow()
+        : string.Equals(KeySender.ForegroundProcessName(), BrowserName, StringComparison.OrdinalIgnoreCase);
 
     // Page commands run one after another, in the order pressed.
     Task _pageWork = Task.CompletedTask;
@@ -226,7 +260,15 @@ sealed class RunningApp : IDisposable
     public void Close()
     {
         _gone = true; // closing on purpose: no Exited
+        _windowWatch?.Dispose();
         Page?.Dispose();
+        if (SharedProfile)
+        {
+            // Only its window: the browser goes on with the other tiles (and quits by itself after the last).
+            AppWindows.Close(Window);
+            Dispose();
+            return;
+        }
         var process = Process;
         if (process != null)
         {
@@ -249,6 +291,7 @@ sealed class RunningApp : IDisposable
 
     IntPtr MainWindow()
     {
+        if (SharedProfile) return AppWindows.Exists(Window) ? Window : IntPtr.Zero;
         try
         {
             var process = Process;
@@ -261,6 +304,7 @@ sealed class RunningApp : IDisposable
 
     public void Dispose()
     {
+        _windowWatch?.Dispose();
         Page?.Dispose();
         Process?.Dispose();
     }

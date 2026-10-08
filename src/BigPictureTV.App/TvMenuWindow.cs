@@ -8,6 +8,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using BigPictureTV.Core.TvMenu;
 
@@ -32,6 +33,21 @@ interface ITvMenuView
 
     /// <summary>B or Esc.</summary>
     event Action BackRequested;
+
+    /// <summary>Shows what is playing on the PC, or hides the strip (null).</summary>
+    void ShowNowPlaying(NowPlayingInfo? info);
+
+    /// <summary>Shows the sound output in use, or hides it (null).</summary>
+    void ShowAudioOutput(string? name);
+
+    /// <summary>LB/RB (skip), Start or A on the music strip (play/pause).</summary>
+    event Action<PadAction> MediaRequested;
+
+    /// <summary>A on the sound output: move the sound to the next output.</summary>
+    event Action AudioRequested;
+
+    /// <summary>Right stick up (+1) or down (-1): the PC's volume when on the sound output, else the music's.</summary>
+    event Action<bool, int> VolumeRequested;
 }
 
 /// <summary>
@@ -48,6 +64,14 @@ sealed class TvMenuWindow : Window, ITvMenuView
     readonly TextBlock _clock, _message, _hints, _hintMenu;
     readonly DispatcherTimer _clockTimer = new() { Interval = TimeSpan.FromSeconds(10) };
     readonly List<Border> _tiles = new();
+    readonly StackPanel _bar = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(96, 8, 96, 8) };
+    readonly Border _musicCard, _audioCard;
+    readonly Image _cover = new() { Width = 96, Height = 96, Stretch = Stretch.UniformToFill };
+    readonly TextBlock _songTitle, _songArtist, _songState, _audioName;
+    NowPlayingInfo? _nowPlaying;
+    string? _audioOutput;
+    bool _inBar;  // the selection is on the strip under the tiles
+    int _barItem; // which of BarItems()
     IReadOnlyList<TvApp> _apps = Array.Empty<TvApp>();
     IReadOnlyCollection<string> _open = Array.Empty<string>();
     TvApp? _current;
@@ -56,6 +80,9 @@ sealed class TvMenuWindow : Window, ITvMenuView
     public event Action<TvApp>? Chosen;
     public event Action<TvApp>? CloseRequested;
     public event Action? BackRequested;
+    public event Action<PadAction>? MediaRequested;
+    public event Action? AudioRequested;
+    public event Action<bool, int>? VolumeRequested;
 
     public TvMenuWindow()
     {
@@ -84,11 +111,32 @@ sealed class TvMenuWindow : Window, ITvMenuView
         _hintMenu = new TextBlock { FontSize = 22, Opacity = 0.55, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 10, 0, 0) };
         var footer = new StackPanel { Margin = new Thickness(96, 16, 96, 56), Children = { _message, _hints, _hintMenu } };
 
+        // Under the tiles, like a console's control center: what is playing and where the sound goes.
+        _songTitle = new TextBlock { FontSize = 28, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
+        _songArtist = new TextBlock { FontSize = 22, Opacity = 0.75, TextTrimming = TextTrimming.CharacterEllipsis };
+        _songState = new TextBlock { FontSize = 20, Opacity = 0.6, Margin = new Thickness(0, 4, 0, 0) };
+        var song = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(20, 0, 0, 0), Width = 460, Children = { _songTitle, _songArtist, _songState } };
+        var coverFrame = new Border { CornerRadius = new CornerRadius(8), ClipToBounds = true, Background = new SolidColorBrush(Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF)), Child = _cover };
+        _musicCard = Card(new StackPanel { Orientation = Orientation.Horizontal, Children = { coverFrame, song } });
+        _audioName = new TextBlock { FontSize = 28, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 380 };
+        _audioCard = Card(new StackPanel
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { new TextBlock { Text = "🔊  " + S.AudioOutput, FontSize = 22, Opacity = 0.75 }, _audioName },
+        });
+        _audioCard.MinHeight = 128;
+        _musicCard.MouseLeftButtonUp += (_, _) => MediaRequested?.Invoke(PadAction.PlayPause);
+        _audioCard.MouseLeftButtonUp += (_, _) => AudioRequested?.Invoke();
+        _bar.Children.Add(_musicCard);
+        _bar.Children.Add(_audioCard);
+
         var root = new DockPanel();
         DockPanel.SetDock(header, Dock.Top);
         DockPanel.SetDock(footer, Dock.Bottom);
+        DockPanel.SetDock(_bar, Dock.Bottom);
         root.Children.Add(header);
         root.Children.Add(footer);
+        root.Children.Add(_bar);
         root.Children.Add(_grid);
         Content = root;
 
@@ -115,6 +163,7 @@ sealed class TvMenuWindow : Window, ITvMenuView
             _grid.Children.Add(tile);
         }
         // Start on the app in front, else where the selection was.
+        if (!IsVisible) _inBar = false; // opening the menu starts on the tiles
         int index = current != null ? IndexOf(apps, current.Key) : keep;
         Select(Math.Clamp(index < 0 ? _selected : index, 0, Math.Max(0, apps.Count - 1)));
         _message.Text = message ?? "";
@@ -147,6 +196,92 @@ sealed class TvMenuWindow : Window, ITvMenuView
     {
         e.Cancel = true;
         BackRequested?.Invoke();
+    }
+
+    static Border Card(UIElement content) => new()
+    {
+        Background = new SolidColorBrush(Color.FromRgb(0x22, 0x27, 0x30)),
+        CornerRadius = new CornerRadius(16),
+        Padding = new Thickness(16),
+        Margin = new Thickness(16, 0, 16, 0),
+        BorderBrush = Brushes.White,
+        RenderTransformOrigin = new Point(0.5, 0.5),
+        Child = content,
+    };
+
+    public void ShowNowPlaying(NowPlayingInfo? info)
+    {
+        if (info == _nowPlaying) return;
+        bool newCover = !ReferenceEquals(info?.Cover, _nowPlaying?.Cover);
+        _nowPlaying = info;
+        if (info != null)
+        {
+            _songTitle.Text = info.Title.Length > 0 ? info.Title : info.App;
+            _songArtist.Text = info.Artist.Length > 0 && info.App.Length > 0 ? $"{info.Artist}  ·  {info.App}" : info.Artist.Length > 0 ? info.Artist : info.App;
+            _songState.Text = info.Playing ? "▶  " + S.NowPlayingPlaying : "❚❚  " + S.NowPlayingPaused;
+            if (newCover) _cover.Source = Cover(info.Cover);
+        }
+        Select(_selected);
+    }
+
+    public void ShowAudioOutput(string? name)
+    {
+        _audioOutput = name;
+        _audioName.Text = name ?? "";
+        Select(_selected);
+    }
+
+    static ImageSource? Cover(byte[]? bytes)
+    {
+        if (bytes == null) return null;
+        try
+        {
+            var image = new BitmapImage();
+            image.BeginInit();
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.DecodePixelWidth = 192;
+            image.StreamSource = new System.IO.MemoryStream(bytes);
+            image.EndInit();
+            image.Freeze();
+            return image;
+        }
+        catch (Exception e) when (e is NotSupportedException or System.IO.IOException or ArgumentException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    // The strip's cards that are showing, left to right.
+    List<Border> BarItems()
+    {
+        var items = new List<Border>();
+        if (_nowPlaying != null) items.Add(_musicCard);
+        if (_audioOutput != null) items.Add(_audioCard);
+        return items;
+    }
+
+    void Move(PadAction direction)
+    {
+        var bar = BarItems();
+        if (_inBar)
+        {
+            if (direction == PadAction.Up) _inBar = false;
+            else if (direction == PadAction.Left) _barItem = Math.Max(0, _barItem - 1);
+            else if (direction == PadAction.Right) _barItem = Math.Min(bar.Count - 1, _barItem + 1);
+            Select(_selected);
+            return;
+        }
+        int next = GridNav.Move(_selected, _tiles.Count, _columns, direction);
+        if (direction == PadAction.Down && next == _selected && bar.Count > 0) _inBar = true; // down from the last row
+        Select(next);
+    }
+
+    void AcceptBar()
+    {
+        var bar = BarItems();
+        if (_barItem >= bar.Count) return;
+        if (bar[_barItem] == _musicCard) MediaRequested?.Invoke(PadAction.PlayPause);
+        else AudioRequested?.Invoke();
     }
 
     static int IndexOf(IReadOnlyList<TvApp> apps, string key)
@@ -187,7 +322,7 @@ sealed class TvMenuWindow : Window, ITvMenuView
             Opacity = app.IsUsable ? 1 : 0.4,
             Child = label,
         };
-        tile.MouseLeftButtonUp += (_, _) => { Select(index); Accept(); };
+        tile.MouseLeftButtonUp += (_, _) => { _inBar = false; Select(index); Accept(); };
         return tile;
     }
 
@@ -205,6 +340,31 @@ sealed class TvMenuWindow : Window, ITvMenuView
 
     void Select(int index)
     {
+        var bar = BarItems();
+        _musicCard.Visibility = _nowPlaying != null ? Visibility.Visible : Visibility.Collapsed;
+        _audioCard.Visibility = _audioOutput != null ? Visibility.Visible : Visibility.Collapsed;
+        if (bar.Count == 0) _inBar = false;
+        _barItem = Math.Clamp(_barItem, 0, Math.Max(0, bar.Count - 1));
+        foreach (var card in new[] { _musicCard, _audioCard })
+        {
+            bool on = _inBar && _barItem < bar.Count && bar[_barItem] == card;
+            card.BorderThickness = new Thickness(on ? 5 : 0);
+            card.RenderTransform = new ScaleTransform(on ? 1.04 : 1, on ? 1.04 : 1);
+        }
+        if (_inBar)
+        {
+            foreach (var tile in _tiles)
+            {
+                tile.BorderThickness = new Thickness(0);
+                tile.RenderTransform = new ScaleTransform(1, 1);
+            }
+            _selected = index;
+            _hints.Text = bar[_barItem] == _musicCard
+                ? string.Join("        ", S.HintPlayPause, S.HintSkip, S.HintMusicVolume, S.HintBackToTiles)
+                : string.Join("        ", S.HintNextOutput, S.HintWindowsVolume, S.HintBackToTiles);
+            return;
+        }
+
         if (_tiles.Count == 0) return;
         _selected = index;
         for (int i = 0; i < _tiles.Count; i++)
@@ -226,13 +386,22 @@ sealed class TvMenuWindow : Window, ITvMenuView
         switch (action)
         {
             case PadAction.Up or PadAction.Down or PadAction.Left or PadAction.Right:
-                Select(GridNav.Move(_selected, _tiles.Count, _columns, action));
+                Move(action);
                 break;
             case PadAction.Accept:
-                Accept();
+                if (_inBar) AcceptBar();
+                else Accept();
                 break;
             case PadAction.Option:
-                if (_selected < _apps.Count && _open.Contains(_apps[_selected].Key)) CloseRequested?.Invoke(_apps[_selected]);
+                if (!_inBar && _selected < _apps.Count && _open.Contains(_apps[_selected].Key)) CloseRequested?.Invoke(_apps[_selected]);
+                break;
+            case PadAction.Previous or PadAction.Next or PadAction.PlayPause:
+                if (_nowPlaying != null) MediaRequested?.Invoke(action);
+                break;
+            case PadAction.VolumeUp or PadAction.VolumeDown:
+                var bar = BarItems();
+                bool windows = _inBar && _barItem < bar.Count && bar[_barItem] == _audioCard;
+                VolumeRequested?.Invoke(windows, action == PadAction.VolumeUp ? 1 : -1);
                 break;
             case PadAction.Back:
                 BackRequested?.Invoke();

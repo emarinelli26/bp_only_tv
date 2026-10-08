@@ -5,6 +5,10 @@
 (() => {
   if (window.__tvPlayerLoaded) return;
   window.__tvPlayerLoaded = true;
+  let active = false; // in a TV menu window (see background.js)
+  try {
+    chrome.runtime.sendMessage({ tvWindow: true }).then(yes => { active = !!yes; }, () => {});
+  } catch (err) { /* extension reloaded */ }
 
   function video() {
     let best = null, bestArea = 0;
@@ -24,13 +28,13 @@
   }
 
   chrome.runtime.onMessage.addListener(message => {
-    if (message && message.player) run(message.player);
+    if (active && message && message.player) run(message.player);
   });
 
   // Keys typed while the focus is in this frame (the player was chosen with A).
   if (window.top === window) return;
   addEventListener('keydown', e => {
-    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (!active || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     let handled = false;
     if (e.key === 'PageUp') handled = run({ seek: -10 });
     else if (e.key === 'PageDown') handled = run({ seek: 10 });

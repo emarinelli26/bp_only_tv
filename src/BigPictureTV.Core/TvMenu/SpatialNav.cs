@@ -9,15 +9,22 @@ namespace BigPictureTV.Core.TvMenu;
 /// </summary>
 public static class SpatialNav
 {
-    public static readonly string[] Files = { "manifest.json", "background.js", "spatial-nav.js", "player.js" };
+    public static readonly string[] Files =
+    {
+        "manifest.json", "background.js", "spatial-nav.js", "player.js", "icon16.png", "icon48.png", "icon128.png",
+    };
 
-    /// <summary>The extension's files, as shipped with the app.</summary>
-    public static string Read(string file)
+    /// <summary>A text file of the extension, as shipped with the app.</summary>
+    public static string Read(string file) => System.Text.Encoding.UTF8.GetString(ReadBytes(file));
+
+    /// <summary>Any file of the extension, as shipped with the app.</summary>
+    public static byte[] ReadBytes(string file)
     {
         using var stream = typeof(SpatialNav).Assembly.GetManifestResourceStream("extension/" + file)
             ?? throw new InvalidOperationException($"{file} is missing from the build.");
-        using var reader = new StreamReader(stream);
-        return reader.ReadToEnd();
+        using var copy = new MemoryStream();
+        stream.CopyTo(copy);
+        return copy.ToArray();
     }
 
     /// <summary>Writes the extension to a folder for the browser to load, if it changed.</summary>
@@ -26,8 +33,9 @@ public static class SpatialNav
         Directory.CreateDirectory(folder);
         foreach (var file in Files)
         {
-            string path = Path.Combine(folder, file), text = Read(file);
-            if (!File.Exists(path) || File.ReadAllText(path) != text) File.WriteAllText(path, text);
+            string path = Path.Combine(folder, file);
+            byte[] bytes = ReadBytes(file);
+            if (!File.Exists(path) || !File.ReadAllBytes(path).AsSpan().SequenceEqual(bytes)) File.WriteAllBytes(path, bytes);
         }
     }
 }

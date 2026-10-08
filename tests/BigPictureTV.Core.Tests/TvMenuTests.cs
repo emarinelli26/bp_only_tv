@@ -12,13 +12,14 @@ public class TvMenuTests
     {
         var settings = new AppSettings();
         Assert.True(settings.ShortcutOpensTvMenu);
-        Assert.Equal(new[] { "YouTube", "Crunchyroll", "Big Picture", "Desktop" }, settings.TvMenuApps.Select(a => a.ToString()));
+        Assert.Equal(new[] { "YouTube", "Crunchyroll", "Spotify", "YouTube Music", "Big Picture", "Desktop" }, settings.TvMenuApps.Select(a => a.ToString()));
         Assert.All(settings.TvMenuApps, a => Assert.True(a.IsUsable));
 
         var file = Path.Combine(Path.GetTempPath(), $"bptv-{Guid.NewGuid():N}.json");
         try
         {
-            settings.TvMenuApps.RemoveAt(1);
+            settings.TvMenuApps.RemoveRange(1, 3);
+            settings.TvMenuVersion = TvApp.DefaultsVersion;
             settings.Save(file);
             var loaded = AppSettings.Load(file);
             Assert.Equal(3, loaded.TvMenuApps.Count); // the saved list, not defaults added on top
@@ -53,10 +54,22 @@ public class TvMenuTests
         Assert.EndsWith("\"--app=https://www.youtube.com/tv\"", args);
 
         var plain = new TvApp { Name = "Mi Página!", Target = "https://example.com/\"x" };
-        Assert.EndsWith(Path.Combine("Browser", "mi-página"), BrowserCommand.ProfileDir("d", plain));
+        Assert.EndsWith(Path.Combine("Browser", "shared"), BrowserCommand.ProfileDir("d", plain));
+        Assert.EndsWith(Path.Combine("Browser", "mi-página"), BrowserCommand.NamedProfileDir("d", plain));
         Assert.DoesNotContain("--user-agent", BrowserCommand.Arguments(plain, "p"));
         Assert.EndsWith("\"--app=https://example.com/x\"", BrowserCommand.Arguments(plain, "p"));
-        Assert.EndsWith(Path.Combine("Browser", "web"), BrowserCommand.ProfileDir("d", new TvApp { Name = "!!" }));
+        Assert.EndsWith(Path.Combine("Browser", "web"), BrowserCommand.NamedProfileDir("d", new TvApp { Name = "!!" }));
+    }
+
+    [Fact]
+    public void PlainPagesShareAProfileButTvPagesAndMusicKeepTheirOwn()
+    {
+        var byName = TvApp.Defaults().ToDictionary(a => a.Name);
+        Assert.True(BrowserCommand.SharesProfile(byName["Crunchyroll"]));
+        Assert.False(BrowserCommand.SharesProfile(byName["YouTube"]));       // TV interface
+        Assert.False(BrowserCommand.SharesProfile(byName["YouTube Music"])); // its own volume
+        Assert.False(BrowserCommand.SharesProfile(byName["Spotify"]));       // a program
+        Assert.EndsWith(Path.Combine("Browser", "youtube-music"), BrowserCommand.ProfileDir("d", byName["YouTube Music"]));
     }
 
     [Theory]
@@ -130,6 +143,11 @@ public class TvMenuTests
             SpatialNav.Write(dir);
             Assert.True(File.Exists(Path.Combine(dir, "manifest.json")));
             Assert.True(File.Exists(Path.Combine(dir, "spatial-nav.js")));
+            // Every file the manifest names ships, icons included (the store wants a 128 px one).
+            foreach (var named in System.Text.RegularExpressions.Regex.Matches(SpatialNav.Read("manifest.json"), "\"([\\w-]+\\.(?:js|png))\"").Select(m => m.Groups[1].Value))
+                Assert.True(File.Exists(Path.Combine(dir, named)), named);
+            Assert.Equal(new byte[] { 0x89, (byte)'P', (byte)'N', (byte)'G' }, File.ReadAllBytes(Path.Combine(dir, "icon128.png"))[..4]);
+            SpatialNav.Write(dir); // again, unchanged: fine
         }
         finally
         {
@@ -309,7 +327,7 @@ public class TvMenuTests
             Assert.Equal("Custom/1.0", loaded.TvMenuApps[1].UserAgent); // the user's own choice stays
 
             File.WriteAllText(file, "{ \"TvMenuApps\": null }");
-            Assert.Equal(4, AppSettings.Load(file).TvMenuApps.Count);
+            Assert.Equal(TvApp.Defaults().Count, AppSettings.Load(file).TvMenuApps.Count);
         }
         finally
         {
@@ -326,4 +344,77 @@ public class TvMenuTests
     [InlineData(null, false)]
     public void FindsTheBrowserStartedForATile(string? commandLine, bool expected) =>
         Assert.Equal(expected, BrowserCommand.IsMainProcessFor(commandLine, "C:\\D\\Browser\\youtube"));
+
+    [Fact]
+    public void MusicTilesReachSettingsSavedBeforeThemOnce()
+    {
+        var file = Path.Combine(Path.GetTempPath(), $"bptv-{Guid.NewGuid():N}.json");
+        try
+        {
+            var old = new AppSettings { TvMenuApps = TvApp.Defaults().Where(a => !a.Name.Contains("Spotify") && !a.Name.Contains("Music")).ToList() };
+            Assert.Equal(0, old.TvMenuVersion);
+            old.Save(file);
+
+            var loaded = AppSettings.Load(file);
+            Assert.Equal(new[] { "YouTube", "Crunchyroll", "Spotify", "YouTube Music", "Big Picture", "Desktop" }, loaded.TvMenuApps.Select(a => a.ToString()));
+            Assert.Equal(TvApp.DefaultsVersion, AppSettings.Load(file).TvMenuVersion); // written back
+
+            // Removed afterwards, it stays removed.
+            loaded.TvMenuApps.RemoveAll(a => a.Name == "Spotify");
+            loaded.Save(file);
+            Assert.DoesNotContain(AppSettings.Load(file).TvMenuApps, a => a.Name == "Spotify");
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [Fact]
+    public void NewDefaultsDontDuplicateATileAlreadyThere()
+    {
+        var apps = new List<TvApp> { new() { Name = "My music", Target = "https://music.youtube.com" } };
+        TvApp.AddNewDefaults(apps, 0);
+        Assert.Equal(new[] { "My music", "Spotify" }, apps.Select(a => a.ToString()));
+    }
+
+    [Fact]
+    public void SpotifyOpensItsAppWithTheWebAsFallback()
+    {
+        var spotify = TvApp.Defaults().Single(a => a.Name == "Spotify");
+        Assert.Equal(TvAppKind.Program, spotify.Kind);
+        Assert.Equal("spotify:", spotify.Target);
+        Assert.True(new TvApp { Target = spotify.Fallback }.IsUsable);
+    }
+
+    [Fact]
+    public void RightStickTurnsTheVolumeAndRepeatsWhileHeld()
+    {
+        var mapper = new PadMapper();
+        Assert.Equal(new[] { PadAction.VolumeUp }, mapper.Update(GamepadButtons.RStickUp, T0));
+        Assert.Empty(mapper.Update(GamepadButtons.RStickUp, T0.AddMilliseconds(100)));
+        Assert.Equal(new[] { PadAction.VolumeUp }, mapper.Update(GamepadButtons.RStickUp, T0.AddMilliseconds(250)));
+        Assert.Equal(new[] { PadAction.VolumeDown }, mapper.Update(GamepadButtons.RStickDown, T0.AddMilliseconds(300)));
+        // Held with a button, it is no combo: the button still counts.
+        Assert.Equal(new[] { PadAction.Accept }, mapper.Update(GamepadButtons.RStickDown | GamepadButtons.A, T0.AddMilliseconds(310)));
+    }
+
+    [Fact]
+    public void TheRightStickIsNeverPartOfACombo() =>
+        Assert.Null(GamepadCombo.ParseAny("RStickUp+A"));
+
+    [Fact]
+    public void MusicTilesAreKnownByName()
+    {
+        var apps = TvApp.Defaults();
+        Assert.Equal(new[] { "Spotify", "YouTube Music" }, apps.Where(a => a.IsMusic).Select(a => a.Name));
+    }
+
+    [Theory]
+    [InlineData("msedge.exe --type=utility --utility-sub-type=audio.mojom.AudioService --user-data-dir=\"C:\\D\\Browser\\YouTube Music\" --field-trial", true)]
+    [InlineData("msedge.exe --user-data-dir=\"C:\\D\\Browser\\YouTube Music\"", true)]
+    [InlineData("msedge.exe --type=utility --user-data-dir=\"C:\\D\\Browser\\YouTube\"", false)]
+    [InlineData(null, false)]
+    public void HelperProcessesBelongToTheirProfile(string? commandLine, bool expected) =>
+        Assert.Equal(expected, BrowserCommand.UsesProfile(commandLine, "C:\\D\\Browser\\YouTube Music"));
 }

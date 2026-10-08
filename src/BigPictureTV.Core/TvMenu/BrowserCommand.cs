@@ -4,12 +4,29 @@ namespace BigPictureTV.Core.TvMenu;
 
 /// <summary>
 /// The command line that opens a web tile in Edge or Chrome: an app window
-/// (no tabs or address bar) in full screen, with its own profile per tile so
-/// logins are kept and never mix with the user's everyday browser.
+/// (no tabs or address bar) in full screen, with a profile of the TV menu's
+/// own so logins are kept and never mix with the user's everyday browser.
 /// </summary>
 public static class BrowserCommand
 {
-    public static string ProfileDir(string dataDir, TvApp app)
+    /// <summary>Folder of the profile the plain web tiles share.</summary>
+    public const string SharedProfile = "shared";
+
+    /// <summary>
+    /// Plain pages (Crunchyroll and the like) share one profile, so the
+    /// navigation extension is set up there once for all of them, and each
+    /// opens as a window of the same browser. TV pages need their own (a
+    /// user agent, the DevTools channel), and music its own, so its volume
+    /// can be turned apart from the rest.
+    /// </summary>
+    public static bool SharesProfile(TvApp app) =>
+        app.Kind == TvAppKind.Web && app.UserAgent.Trim().Length == 0 && !app.IsMusic;
+
+    public static string ProfileDir(string dataDir, TvApp app) =>
+        SharesProfile(app) ? Path.Combine(dataDir, "Browser", SharedProfile) : NamedProfileDir(dataDir, app);
+
+    /// <summary>A profile of the tile's own, named after it (where every tile had its profile before).</summary>
+    public static string NamedProfileDir(string dataDir, TvApp app)
     {
         var name = new StringBuilder();
         foreach (char c in app.Name.Trim())
@@ -50,9 +67,13 @@ public static class BrowserCommand
     /// True for the command line of the browser's main process for this
     /// profile; its helper processes (tabs, GPU...) carry a --type= switch.
     /// </summary>
-    public static bool IsMainProcessFor(string? commandLine, string profileDir)
+    public static bool IsMainProcessFor(string? commandLine, string profileDir) =>
+        commandLine != null && !commandLine.Contains("--type=", StringComparison.Ordinal) && UsesProfile(commandLine, profileDir);
+
+    /// <summary>True for any process of the browser on this profile, the main one or a helper (its sound, its pages).</summary>
+    public static bool UsesProfile(string? commandLine, string profileDir)
     {
-        if (string.IsNullOrEmpty(commandLine) || commandLine.Contains("--type=", StringComparison.Ordinal)) return false;
+        if (string.IsNullOrEmpty(commandLine)) return false;
         string dir = profileDir.TrimEnd('\\', '/');
         int at = commandLine.IndexOf("--user-data-dir=", StringComparison.OrdinalIgnoreCase);
         if (at < 0) return false;

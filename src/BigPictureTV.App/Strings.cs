@@ -106,6 +106,18 @@ public sealed class Strings
     public string TvMenuGroup { get; init; } = "";
     public string ShortcutOpensTvMenu { get; init; } = "";
     public string KeyboardHints { get; init; } = "";
+    public string AudioOutput { get; init; } = "";
+    public string NowPlayingPlaying { get; init; } = "";
+    public string NowPlayingPaused { get; init; } = "";
+    public string HintPlayPause { get; init; } = "";
+    public string HintSkip { get; init; } = "";
+    public string HintNextOutput { get; init; } = "";
+    public string HintBackToTiles { get; init; } = "";
+    public string HintMusicVolume { get; init; } = "";
+    public string HintWindowsVolume { get; init; } = "";
+    public string MusicVolume { get; init; } = "";
+    public string WindowsVolume { get; init; } = "";
+    public string NoMusicPlaying { get; init; } = "";
 
     static Strings English() => new()
     {
@@ -206,6 +218,18 @@ public sealed class Strings
         BrowserNotFound = "Microsoft Edge wasn't found. Set another browser as BrowserPath in settings.json.",
         TvMenuGroup = "TV menu",
         ShortcutOpensTvMenu = "The keyboard shortcut and the controller combo open the TV menu (YouTube, Crunchyroll, Big Picture…)",
+        AudioOutput = "Sound output",
+        NowPlayingPlaying = "Playing",
+        NowPlayingPaused = "Paused",
+        HintPlayPause = "A  Play / pause",
+        HintSkip = "LB/RB  Previous / next",
+        HintNextOutput = "A  Next output",
+        HintBackToTiles = "Up  Back to the apps",
+        HintMusicVolume = "Right stick  Music volume",
+        HintWindowsVolume = "Right stick  PC volume",
+        MusicVolume = "Music volume",
+        WindowsVolume = "PC volume",
+        NoMusicPlaying = "No music opened from the TV menu is playing",
         KeyboardHints = "A type   X delete   Y space   L2 capitals   R2 symbols   L1/R1 move   Start done   B close",
     };
 
@@ -308,6 +332,18 @@ public sealed class Strings
         BrowserNotFound = "No se encontró Microsoft Edge. Poné otro navegador en BrowserPath dentro de settings.json.",
         TvMenuGroup = "Menú TV",
         ShortcutOpensTvMenu = "El atajo de teclado y el combo del mando abren el Menú TV (YouTube, Crunchyroll, Big Picture…)",
+        AudioOutput = "Salida de audio",
+        NowPlayingPlaying = "Sonando",
+        NowPlayingPaused = "En pausa",
+        HintPlayPause = "A  Reproducir / pausa",
+        HintSkip = "LB/RB  Anterior / siguiente",
+        HintNextOutput = "A  Cambiar salida",
+        HintBackToTiles = "Arriba  Volver a las apps",
+        HintMusicVolume = "Stick derecho  Volumen de la música",
+        HintWindowsVolume = "Stick derecho  Volumen de la PC",
+        MusicVolume = "Volumen de la música",
+        WindowsVolume = "Volumen de la PC",
+        NoMusicPlaying = "No suena música abierta desde el Menú TV",
         KeyboardHints = "A escribir   X borrar   Y espacio   L2 mayúsculas   R2 símbolos   L1/R1 mover   Start listo   B cerrar",
     };
 }

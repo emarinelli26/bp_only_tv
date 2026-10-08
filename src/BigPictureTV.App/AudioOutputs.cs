@@ -13,7 +13,7 @@ namespace BigPictureTV.App;
 static class AudioOutputs
 {
     const int eRender = 0, DEVICE_STATE_ACTIVE = 1, STGM_READ = 0, VT_LPWSTR = 31;
-    const int eConsole = 0, eMultimedia = 1, eCommunications = 2;
+    const int eConsole = 0, eMultimedia = 1, eCommunications = 2, CLSCTX_ALL = 23;
     static PROPERTYKEY FriendlyName = new() { fmtid = new Guid("a45c254e-df1c-4efd-8020-67d146a850e0"), pid = 14 };
 
     /// <summary>Active sound outputs. Empty if Windows can't list them.</summary>
@@ -66,6 +66,128 @@ static class AudioOutputs
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Moves the volume of the output in use by <paramref name="delta"/> (0 to 1,
+    /// so 0.02 is 2%; 0 just reads it). Turning it up unmutes. Null if Windows can't tell.
+    /// </summary>
+    public static (int Percent, bool Muted)? ChangeVolume(float delta)
+    {
+        try
+        {
+            var enumerator = (IMMDeviceEnumerator)new MMDeviceEnumerator();
+            if (enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia, out var device) != 0) return null;
+            var iid = typeof(IAudioEndpointVolume).GUID;
+            if (device.Activate(ref iid, CLSCTX_ALL, IntPtr.Zero, out var pointer) != 0 || pointer == IntPtr.Zero) return null;
+            try
+            {
+                var volume = (IAudioEndpointVolume)Marshal.GetObjectForIUnknown(pointer);
+                if (volume.GetMasterVolumeLevelScalar(out float level) != 0) return null;
+                volume.GetMute(out bool muted);
+                if (delta != 0)
+                {
+                    var context = Guid.Empty;
+                    level = Math.Clamp(MathF.Round((level + delta) * 50) / 50, 0, 1); // whole steps of 2%
+                    volume.SetMasterVolumeLevelScalar(level, ref context);
+                    if (muted && delta > 0 && volume.SetMute(false, ref context) == 0) muted = false;
+                }
+                return ((int)MathF.Round(level * 100), muted);
+            }
+            finally
+            {
+                Marshal.Release(pointer);
+            }
+        }
+        catch (Exception e) when (e is COMException or InvalidCastException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Moves the volume of the apps whose process <paramref name="isTarget"/>
+    /// picks (their own slider in Windows' volume mixer, not the PC's), by
+    /// <paramref name="delta"/> like <see cref="ChangeVolume"/>. Null if none of them makes sound.
+    /// </summary>
+    public static int? ChangeAppVolume(Func<int, bool> isTarget, float delta)
+    {
+        int? percent = null;
+        ForAppSessions(isTarget, allOutputs: false, targets =>
+        {
+            // The first one sets the level; the others (a browser can have several) follow it.
+            targets[0].GetMasterVolume(out float level);
+            if (delta != 0)
+            {
+                var context = Guid.Empty;
+                level = Math.Clamp(MathF.Round((level + delta) * 50) / 50, 0, 1);
+                foreach (var volume in targets)
+                {
+                    volume.SetMasterVolume(level, ref context);
+                    if (delta > 0) volume.SetMute(false, ref context);
+                }
+            }
+            percent = (int)MathF.Round(level * 100);
+        });
+        return percent;
+    }
+
+    /// <summary>
+    /// Puts the apps <paramref name="isTarget"/> picks back to <paramref name="percent"/>,
+    /// on every output (they may have moved with the default). Windows keeps
+    /// an app's level for the next time it runs, so a level left low here
+    /// would stay low for the whole browser.
+    /// </summary>
+    public static void SetAppVolume(Func<int, bool> isTarget, int percent)
+    {
+        ForAppSessions(isTarget, allOutputs: true, targets =>
+        {
+            var context = Guid.Empty;
+            foreach (var volume in targets) volume.SetMasterVolume(Math.Clamp(percent / 100f, 0, 1), ref context);
+        });
+    }
+
+    // Runs `act` once per output, with the target apps' sessions on it.
+    static void ForAppSessions(Func<int, bool> isTarget, bool allOutputs, Action<List<ISimpleAudioVolume>> act)
+    {
+        try
+        {
+            var enumerator = (IMMDeviceEnumerator)new MMDeviceEnumerator();
+            var outputs = new List<IMMDevice>();
+            if (allOutputs)
+            {
+                if (enumerator.EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE, out var devices) != 0) return;
+                devices.GetCount(out int count);
+                for (int i = 0; i < count; i++)
+                    if (devices.Item(i, out var device) == 0) outputs.Add(device);
+            }
+            else if (enumerator.GetDefaultAudioEndpoint(eRender, eMultimedia, out var main) == 0) outputs.Add(main);
+
+            foreach (var device in outputs)
+            {
+                var iid = typeof(IAudioSessionManager2).GUID;
+                if (device.Activate(ref iid, CLSCTX_ALL, IntPtr.Zero, out var pointer) != 0 || pointer == IntPtr.Zero) continue;
+                try
+                {
+                    var manager = (IAudioSessionManager2)Marshal.GetObjectForIUnknown(pointer);
+                    if (manager.GetSessionEnumerator(out var sessions) != 0) continue;
+                    sessions.GetCount(out int count);
+                    var targets = new List<ISimpleAudioVolume>();
+                    for (int i = 0; i < count; i++)
+                    {
+                        if (sessions.GetSession(i, out var session) != 0 || session == null) continue;
+                        if (session.GetProcessId(out uint pid) != 0 || pid == 0 || !isTarget((int)pid)) continue;
+                        if (session is ISimpleAudioVolume volume) targets.Add(volume);
+                    }
+                    if (targets.Count > 0) act(targets);
+                }
+                finally
+                {
+                    Marshal.Release(pointer);
+                }
+            }
+        }
+        catch (Exception e) when (e is COMException or InvalidCastException) { }
     }
 
     static string? NameOf(IMMDevice device)
@@ -130,6 +252,68 @@ static class AudioOutputs
         [PreserveSig] int GetCount(out int count);
         [PreserveSig] int GetAt(int index, out PROPERTYKEY key);
         [PreserveSig] int GetValue(ref PROPERTYKEY key, out PROPVARIANT value);
+    }
+
+    // Only the methods up to GetMute are called; the rest of the vtable is left out.
+    [ComImport, Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IAudioEndpointVolume
+    {
+        [PreserveSig] int RegisterControlChangeNotify(IntPtr notify);
+        [PreserveSig] int UnregisterControlChangeNotify(IntPtr notify);
+        [PreserveSig] int GetChannelCount(out uint count);
+        [PreserveSig] int SetMasterVolumeLevel(float levelDb, ref Guid context);
+        [PreserveSig] int SetMasterVolumeLevelScalar(float level, ref Guid context);
+        [PreserveSig] int GetMasterVolumeLevel(out float levelDb);
+        [PreserveSig] int GetMasterVolumeLevelScalar(out float level);
+        [PreserveSig] int SetChannelVolumeLevel(uint channel, float levelDb, ref Guid context);
+        [PreserveSig] int SetChannelVolumeLevelScalar(uint channel, float level, ref Guid context);
+        [PreserveSig] int GetChannelVolumeLevel(uint channel, out float levelDb);
+        [PreserveSig] int GetChannelVolumeLevelScalar(uint channel, out float level);
+        [PreserveSig] int SetMute([MarshalAs(UnmanagedType.Bool)] bool mute, ref Guid context);
+        [PreserveSig] int GetMute([MarshalAs(UnmanagedType.Bool)] out bool mute);
+    }
+
+    // The apps making sound on an output (Windows' volume mixer).
+    [ComImport, Guid("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IAudioSessionManager2
+    {
+        [PreserveSig] int GetAudioSessionControl(IntPtr groupingParam, int flags, out IntPtr control);
+        [PreserveSig] int GetSimpleAudioVolume(IntPtr groupingParam, int flags, out IntPtr volume);
+        [PreserveSig] int GetSessionEnumerator(out IAudioSessionEnumerator sessions);
+    }
+
+    [ComImport, Guid("E2F5BB11-0570-40CA-ACDD-3AA01277DEE8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IAudioSessionEnumerator
+    {
+        [PreserveSig] int GetCount(out int count);
+        [PreserveSig] int GetSession(int index, out IAudioSessionControl2 session);
+    }
+
+    // IAudioSessionControl's methods first, then IAudioSessionControl2's up to GetProcessId.
+    [ComImport, Guid("bfb7ff88-7239-4fc9-8fa2-07c950be9c6d"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IAudioSessionControl2
+    {
+        [PreserveSig] int GetState(out int state);
+        [PreserveSig] int GetDisplayName(out IntPtr name);
+        [PreserveSig] int SetDisplayName(IntPtr name, ref Guid context);
+        [PreserveSig] int GetIconPath(out IntPtr path);
+        [PreserveSig] int SetIconPath(IntPtr path, ref Guid context);
+        [PreserveSig] int GetGroupingParam(out Guid group);
+        [PreserveSig] int SetGroupingParam(ref Guid group, ref Guid context);
+        [PreserveSig] int RegisterAudioSessionNotification(IntPtr notify);
+        [PreserveSig] int UnregisterAudioSessionNotification(IntPtr notify);
+        [PreserveSig] int GetSessionIdentifier(out IntPtr id);
+        [PreserveSig] int GetSessionInstanceIdentifier(out IntPtr id);
+        [PreserveSig] int GetProcessId(out uint processId);
+    }
+
+    [ComImport, Guid("87CE5498-68D6-44E5-9215-6DA47EF883D8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface ISimpleAudioVolume
+    {
+        [PreserveSig] int SetMasterVolume(float level, ref Guid context);
+        [PreserveSig] int GetMasterVolume(out float level);
+        [PreserveSig] int SetMute([MarshalAs(UnmanagedType.Bool)] bool mute, ref Guid context);
+        [PreserveSig] int GetMute([MarshalAs(UnmanagedType.Bool)] out bool mute);
     }
 
     [ComImport, Guid("870af99c-171d-4f9e-af0d-e63df40c2bc9")]

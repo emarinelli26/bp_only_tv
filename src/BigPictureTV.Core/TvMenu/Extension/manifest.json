@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
   "name": "TV menu navigation",
-  "version": "1.1",
-  "description": "Moves a focus box between links and buttons with the arrow keys, and works video players, for the BigPictureTV TV menu.",
+  "version": "1.2",
+  "description": "Controller navigation for the BigPictureTV TV menu: moves a focus box between links and buttons with the arrow keys and works video players. Only active in the app windows the TV menu opens.",
+  "icons": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" },
   "background": { "service_worker": "background.js" },
   "content_scripts": [
     {

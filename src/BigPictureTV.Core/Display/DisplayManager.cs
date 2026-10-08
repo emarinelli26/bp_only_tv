@@ -15,6 +15,9 @@ public interface IDisplaySwitcher
     /// <summary>True if, right now, the displays show the TV layout we switched to.</summary>
     bool IsOnTv();
 
+    /// <summary>True if the TV we switched to is still on, whatever else came on with it.</summary>
+    bool TvIsActive();
+
     /// <summary>Drops the saved layout without applying it (the desktop is already back).</summary>
     void ForgetSavedLayout();
 }
@@ -129,6 +132,13 @@ public sealed class DisplayManager : IDisplaySwitcher
         var displays = _display.ListDisplays();
         string? tvPath = _switchedTo ?? _selectTv(displays).Tv?.DevicePath;
         return tvPath != null && IsIn(_switchedLayout ?? _layout(), displays, tvPath);
+    }
+
+    public bool TvIsActive()
+    {
+        var displays = _display.ListDisplays();
+        string? tvPath = _switchedTo ?? _selectTv(displays).Tv?.DevicePath;
+        return tvPath != null && displays.Any(d => d.Active && string.Equals(d.DevicePath, tvPath, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>Whether the displays already show the given TV layout.</summary>

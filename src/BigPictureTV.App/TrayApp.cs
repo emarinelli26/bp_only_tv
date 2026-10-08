@@ -451,7 +451,11 @@ public sealed class TrayApp : IDisposable
 
     void OnModeChanged(DisplayMode mode)
     {
-        if (mode == DisplayMode.Desktop) RestoreAudio();
+        if (mode == DisplayMode.Desktop)
+        {
+            _tvMenu?.CloseAll();
+            RestoreAudio();
+        }
         else MoveAudioToTv();
         UpdateIcon();
         Notify(mode == DisplayMode.Desktop ? S.NowOnDesktop : S.NowOnTv, ToolTipIcon.None);

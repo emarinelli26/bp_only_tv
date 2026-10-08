@@ -35,6 +35,11 @@ sealed class FakeSwitcher : IDisplaySwitcher
 
     public bool IsOnTv() => TvOnly;
 
+    /// <summary>The TV is still on although other displays came back too.</summary>
+    public bool TvStillOn { get; set; }
+
+    public bool TvIsActive() => TvOnly || TvStillOn;
+
     public void ForgetSavedLayout() => HasSavedLayout = false;
 }
 
