@@ -34,6 +34,7 @@ sealed class TvSession : IDisposable
     readonly Dictionary<string, RunningApp> _running = new();
 
     readonly NowPlaying _nowPlaying;
+    readonly TileIcons _icons;
     readonly System.Windows.Forms.Timer _mediaTimer = new() { Interval = 1500 };
     bool _readingMedia;
     ITvMenuView? _view;
@@ -66,6 +67,7 @@ sealed class TvSession : IDisposable
         _menuButtonName = menuButtonName;
         _signal = new MenuSignal(() => Post(Open));
         _nowPlaying = new NowPlaying(log);
+        _icons = new TileIcons(log);
         _mediaTimer.Tick += (_, _) => _ = RefreshMediaAsync();
     }
 
@@ -115,7 +117,9 @@ sealed class TvSession : IDisposable
         var origin = OriginTile();
         if (origin != null) apps.Insert(0, origin);
         _menuShown = true;
+        _view.ShowIcons(_icons.Known);
         _view.Show(apps, _running.Keys.ToList(), _inOrigin && origin != null ? origin : _current?.App, message, _menuButtonName());
+        _icons.Prepare(apps, () => Post(() => { if (_menuShown) _view?.ShowIcons(_icons.Known); }));
         ShowAudioOutput();
         if (!_mediaTimer.Enabled)
         {

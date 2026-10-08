@@ -29,4 +29,22 @@ static class LinkHandlers
             return true; // can't tell: let Windows try
         }
     }
+
+    /// <summary>The program that opens this kind of link, or null (none, or a Store app).</summary>
+    public static string? Program(string link)
+    {
+        string scheme = link[..link.IndexOf(':')];
+        try
+        {
+            using var key = Registry.ClassesRoot.OpenSubKey($@"{scheme}\shell\open\command");
+            string command = (key?.GetValue(null) as string ?? "").Trim();
+            string exe = command.StartsWith('"') ? command[1..Math.Max(1, command.IndexOf('"', 1))] : command.Split(' ')[0];
+            exe = Environment.ExpandEnvironmentVariables(exe);
+            return exe.Length > 0 && System.IO.File.Exists(exe) ? exe : null;
+        }
+        catch (Exception e) when (e is System.Security.SecurityException or UnauthorizedAccessException or ArgumentException)
+        {
+            return null;
+        }
+    }
 }

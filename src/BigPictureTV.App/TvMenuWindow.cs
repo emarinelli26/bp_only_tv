@@ -22,6 +22,9 @@ interface ITvMenuView
 
     void Hide();
 
+    /// <summary>Puts the logos found so far on the tiles (image bytes by tile key).</summary>
+    void ShowIcons(IReadOnlyDictionary<string, byte[]> icons);
+
     /// <summary>A controller action; safe from any thread.</summary>
     void Handle(PadAction action);
 
@@ -64,6 +67,9 @@ sealed class TvMenuWindow : Window, ITvMenuView
     readonly TextBlock _clock, _message, _hints, _hintMenu;
     readonly DispatcherTimer _clockTimer = new() { Interval = TimeSpan.FromSeconds(10) };
     readonly List<Border> _tiles = new();
+    readonly Dictionary<string, Image> _tileImages = new(); // tile key: its logo
+    IReadOnlyDictionary<string, byte[]> _icons = new Dictionary<string, byte[]>();
+    readonly Dictionary<string, ImageSource?> _decoded = new(); // tile key: its logo, drawn once
     readonly StackPanel _bar = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(96, 8, 96, 8) };
     readonly Border _musicCard, _audioCard;
     readonly Image _cover = new() { Width = 96, Height = 96, Stretch = Stretch.UniformToFill };
@@ -156,6 +162,7 @@ sealed class TvMenuWindow : Window, ITvMenuView
         _grid.Columns = _columns;
         _grid.Children.Clear();
         _tiles.Clear();
+        _tileImages.Clear();
         for (int i = 0; i < apps.Count; i++)
         {
             var tile = BuildTile(apps[i], i);
@@ -291,22 +298,70 @@ sealed class TvMenuWindow : Window, ITvMenuView
         return -1;
     }
 
+    public void ShowIcons(IReadOnlyDictionary<string, byte[]> icons)
+    {
+        foreach (var key in icons.Keys.Where(k => !_icons.TryGetValue(k, out var old) || !ReferenceEquals(old, icons[k])).ToList())
+            _decoded.Remove(key);
+        _icons = icons;
+        foreach (var (key, image) in _tileImages) SetLogo(image, key);
+    }
+
+    void SetLogo(Image image, string key)
+    {
+        if (!_decoded.TryGetValue(key, out var source))
+            _decoded[key] = source = _icons.TryGetValue(key, out var bytes) ? Logo(bytes) : null;
+        image.Source = source;
+        image.Visibility = source == null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    // The largest picture in the file: an .ico holds several sizes, the first often 16 px.
+    static ImageSource? Logo(byte[] bytes)
+    {
+        try
+        {
+            var decoder = BitmapDecoder.Create(new System.IO.MemoryStream(bytes), BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+            var frame = decoder.Frames.OrderByDescending(f => f.PixelWidth).FirstOrDefault();
+            frame?.Freeze();
+            return frame;
+        }
+        catch (Exception e) when (e is NotSupportedException or System.IO.IOException or ArgumentException or InvalidOperationException or System.IO.FileFormatException)
+        {
+            return null;
+        }
+    }
+
     Border BuildTile(TvApp app, int index)
     {
         string name = app.Kind == TvAppKind.Desktop && app.Name.Length == 0 ? S.TvMenuDesktop : app.ToString();
-        var label = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16) };
+        var label = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16, 12, 16, 12) };
+        if (app.Kind == TvAppKind.Desktop && app.Icon.Trim().Length == 0)
+        {
+            label.Children.Add(new TextBlock
+            {
+                Text = "\uE7F4", FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 64,
+                HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 6),
+            });
+        }
+        else
+        {
+            var logo = new Image { Width = 76, Height = 76, Stretch = Stretch.Uniform, Margin = new Thickness(0, 0, 0, 6), HorizontalAlignment = HorizontalAlignment.Center };
+            RenderOptions.SetBitmapScalingMode(logo, BitmapScalingMode.HighQuality);
+            _tileImages[app.Key] = logo;
+            SetLogo(logo, app.Key);
+            label.Children.Add(logo);
+        }
         label.Children.Add(new TextBlock
         {
-            Text = name, FontSize = 40, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap,
-            TextAlignment = TextAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center,
+            Text = name, FontSize = 34, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis,
+            TextAlignment = TextAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, MaxWidth = 300,
         });
         if (_open.Contains(app.Key))
         {
             label.Children.Add(new Border
             {
                 Background = new SolidColorBrush(Color.FromArgb(0x60, 0, 0, 0)), CornerRadius = new CornerRadius(12),
-                Padding = new Thickness(14, 2, 14, 4), Margin = new Thickness(0, 10, 0, 0), HorizontalAlignment = HorizontalAlignment.Center,
-                Child = new TextBlock { Text = "● " + S.TvMenuRunning, FontSize = 22 },
+                Padding = new Thickness(12, 1, 12, 3), Margin = new Thickness(0, 6, 0, 0), HorizontalAlignment = HorizontalAlignment.Center,
+                Child = new TextBlock { Text = "● " + S.TvMenuRunning, FontSize = 20 },
             });
         }
         var tile = new Border

@@ -88,7 +88,9 @@ Agregá `BigPictureTV.exe` como juego que no es de Steam y en sus propiedades po
 
 ### Editar los mosaicos
 
-Están en `%LOCALAPPDATA%\BigPictureTV\settings.json`, en `TvMenuApps`. Cada uno tiene `Name`, `Kind` (`Web`, `Program`, `BigPicture` o `Desktop`), `Target` (dirección o ruta del programa), y opcionales `Arguments`, `UserAgent`, `BackKey` (tecla del botón B, por ejemplo `Esc` o `Alt+Left`), `SearchKey` (botón Y) y `Color` (`#RRGGBB`). Los cambios se ven la próxima vez que abrís el menú.
+Están en `%LOCALAPPDATA%\BigPictureTV\settings.json`, en `TvMenuApps`. Cada uno tiene `Name`, `Kind` (`Web`, `Program`, `BigPicture` o `Desktop`), `Target` (dirección o ruta del programa), y opcionales `Arguments`, `UserAgent`, `BackKey` (tecla del botón B, por ejemplo `Esc` o `Alt+Left`), `SearchKey` (botón Y), `Color` (`#RRGGBB`) e `Icon` (imagen, programa o dirección web para el logo). Los cambios se ven la próxima vez que abrís el menú.
+
+Cada mosaico muestra su logo solo: el ícono que declara la página (se guarda en `%LOCALAPPDATA%\BigPictureTV\Icons`; si la página no responde, por ejemplo por un control anti-bots, se le pide a Google su ícono) o el del programa (Spotify, Steam para Big Picture, el juego que estaba delante). Con `Icon` elegís otro.
 
 ## ¿Quedaste atrapado en la TV?
 
