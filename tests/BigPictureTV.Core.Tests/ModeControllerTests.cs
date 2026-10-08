@@ -239,6 +239,55 @@ public class ModeControllerTests
     }
 
     [Fact]
+    public void RightAfterASwitchOtherDisplaysComingBackWithTheTvOnAreUndone()
+    {
+        var now = T0;
+        _c.Clock = () => now;
+        _c.Toggle(bigPictureOpen: false); // the TV menu, say
+        _sw.TvOnly = false;
+        _sw.TvStillOn = true; // the screen turned off woke up again; Windows extended
+        now = T0.AddSeconds(3);
+        _c.Tick(false, now);
+        _c.Tick(false, now);
+        Assert.Equal(DisplayMode.TvManual, _c.Mode);
+        Assert.Equal(2, _sw.Switches);
+        Assert.True(_sw.TvOnly);
+    }
+
+    [Fact]
+    public void OtherDisplaysComingBackAgainAndAgainAreFollowed()
+    {
+        var now = T0;
+        _c.Clock = () => now;
+        _c.Toggle(bigPictureOpen: false);
+        for (int i = 0; i < 3; i++)
+        {
+            _sw.TvOnly = false;
+            _sw.TvStillOn = true;
+            now = now.AddSeconds(2);
+            _c.Tick(false, now);
+            _c.Tick(false, now);
+        }
+        Assert.Equal(DisplayMode.Desktop, _c.Mode);
+        Assert.Equal(3, _sw.Switches); // the first one and two more tries
+    }
+
+    [Fact]
+    public void LongAfterTheSwitchOtherDisplaysComingBackAreTheUsers()
+    {
+        var now = T0;
+        _c.Clock = () => now;
+        _c.Toggle(bigPictureOpen: false);
+        _sw.TvOnly = false;
+        _sw.TvStillOn = true; // e.g. Win+P, Extend
+        now = T0.AddMinutes(5);
+        _c.Tick(false, now);
+        _c.Tick(false, now);
+        Assert.Equal(DisplayMode.Desktop, _c.Mode);
+        Assert.Equal(1, _sw.Switches);
+    }
+
+    [Fact]
     public void AMomentaryGlitchIsIgnored()
     {
         _c.Tick(true, T0);

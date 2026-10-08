@@ -37,6 +37,23 @@ public sealed class ModeController
     // Consecutive checks that found the displays no longer TV-only.
     int _mismatches;
 
+    // When we last switched, and how many times since then Windows turned
+    // the other displays back on and we switched again.
+    DateTime _switchedAt = DateTime.MinValue;
+    int _reapplies;
+    const int MaxReapplies = 2;
+
+    /// <summary>
+    /// Right after a switch, other displays coming back while the TV stays on
+    /// is Windows reacting to a display that woke up or went to sleep (a TV
+    /// or monitor losing its signal can do that), not the user: within this
+    /// time the TV layout is put back instead of giving up on it.
+    /// </summary>
+    public TimeSpan ReapplyWindow { get; set; } = TimeSpan.FromSeconds(20);
+
+    /// <summary>The time now; tests replace it.</summary>
+    public Func<DateTime> Clock { get; set; } = () => DateTime.UtcNow;
+
     // Set after a switch attempt (failed, or undone by the user) while Big
     // Picture stays open, so we don't retry on every check. Cleared when it closes.
     bool _suppressed;
@@ -96,7 +113,7 @@ public sealed class ModeController
                     if (Paused || _suppressed) break;
                     _log.Write("Big Picture opened.");
                     _suppressed = true;
-                    if (_switcher.SwitchToTv()) SetMode(DisplayMode.TvAuto);
+                    if (SwitchToTv()) SetMode(DisplayMode.TvAuto);
                     break;
 
                 case DisplayMode.TvAuto:
@@ -145,7 +162,7 @@ public sealed class ModeController
             if (Mode != DisplayMode.Desktop && LayoutLeftTv(bigPictureOpen, required: 1)) return;
             if (Mode == DisplayMode.Desktop)
             {
-                if (_switcher.SwitchToTv()) SetMode(DisplayMode.TvManual);
+                if (SwitchToTv()) SetMode(DisplayMode.TvManual);
             }
             else
             {
@@ -167,7 +184,7 @@ public sealed class ModeController
         {
             if (Mode == DisplayMode.Desktop)
             {
-                if (!_switcher.SwitchToTv()) return false;
+                if (!SwitchToTv()) return false;
                 _suppressed = true;
                 SetMode(DisplayMode.TvAuto);
             }
@@ -226,6 +243,14 @@ public sealed class ModeController
         }
         if (++_mismatches < required) return false;
 
+        if (_reapplies < MaxReapplies && Clock() - _switchedAt < ReapplyWindow && _switcher.TvIsActive())
+        {
+            _reapplies++;
+            _mismatches = 0;
+            _log.Write("Windows turned the other displays back on right after the switch, with the TV still on (a display woke up or went to sleep); switching to the TV again.");
+            if (_switcher.SwitchToTv()) return false;
+        }
+
         _log.Write("The displays were changed outside BigPictureTV; back in desktop mode.");
         _mismatches = 0;
         _switcher.ForgetSavedLayout();
@@ -233,6 +258,14 @@ public sealed class ModeController
         _suppressed = bigPictureOpen;
         SetMode(DisplayMode.Desktop);
         LayoutChangedOutside?.Invoke();
+        return true;
+    }
+
+    bool SwitchToTv()
+    {
+        if (!_switcher.SwitchToTv()) return false;
+        _switchedAt = Clock();
+        _reapplies = 0;
         return true;
     }
 
