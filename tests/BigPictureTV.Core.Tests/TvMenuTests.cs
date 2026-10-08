@@ -12,13 +12,14 @@ public class TvMenuTests
     {
         var settings = new AppSettings();
         Assert.True(settings.ShortcutOpensTvMenu);
-        Assert.Equal(new[] { "YouTube", "Crunchyroll", "Big Picture", "Desktop" }, settings.TvMenuApps.Select(a => a.ToString()));
+        Assert.Equal(new[] { "YouTube", "Crunchyroll", "Spotify", "YouTube Music", "Big Picture", "Desktop" }, settings.TvMenuApps.Select(a => a.ToString()));
         Assert.All(settings.TvMenuApps, a => Assert.True(a.IsUsable));
 
         var file = Path.Combine(Path.GetTempPath(), $"bptv-{Guid.NewGuid():N}.json");
         try
         {
-            settings.TvMenuApps.RemoveAt(1);
+            settings.TvMenuApps.RemoveRange(1, 3);
+            settings.TvMenuVersion = TvApp.DefaultsVersion;
             settings.Save(file);
             var loaded = AppSettings.Load(file);
             Assert.Equal(3, loaded.TvMenuApps.Count); // the saved list, not defaults added on top
@@ -309,7 +310,7 @@ public class TvMenuTests
             Assert.Equal("Custom/1.0", loaded.TvMenuApps[1].UserAgent); // the user's own choice stays
 
             File.WriteAllText(file, "{ \"TvMenuApps\": null }");
-            Assert.Equal(4, AppSettings.Load(file).TvMenuApps.Count);
+            Assert.Equal(TvApp.Defaults().Count, AppSettings.Load(file).TvMenuApps.Count);
         }
         finally
         {
@@ -326,4 +327,46 @@ public class TvMenuTests
     [InlineData(null, false)]
     public void FindsTheBrowserStartedForATile(string? commandLine, bool expected) =>
         Assert.Equal(expected, BrowserCommand.IsMainProcessFor(commandLine, "C:\\D\\Browser\\youtube"));
+
+    [Fact]
+    public void MusicTilesReachSettingsSavedBeforeThemOnce()
+    {
+        var file = Path.Combine(Path.GetTempPath(), $"bptv-{Guid.NewGuid():N}.json");
+        try
+        {
+            var old = new AppSettings { TvMenuApps = TvApp.Defaults().Where(a => !a.Name.Contains("Spotify") && !a.Name.Contains("Music")).ToList() };
+            Assert.Equal(0, old.TvMenuVersion);
+            old.Save(file);
+
+            var loaded = AppSettings.Load(file);
+            Assert.Equal(new[] { "YouTube", "Crunchyroll", "Spotify", "YouTube Music", "Big Picture", "Desktop" }, loaded.TvMenuApps.Select(a => a.ToString()));
+            Assert.Equal(TvApp.DefaultsVersion, AppSettings.Load(file).TvMenuVersion); // written back
+
+            // Removed afterwards, it stays removed.
+            loaded.TvMenuApps.RemoveAll(a => a.Name == "Spotify");
+            loaded.Save(file);
+            Assert.DoesNotContain(AppSettings.Load(file).TvMenuApps, a => a.Name == "Spotify");
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [Fact]
+    public void NewDefaultsDontDuplicateATileAlreadyThere()
+    {
+        var apps = new List<TvApp> { new() { Name = "My music", Target = "https://music.youtube.com" } };
+        TvApp.AddNewDefaults(apps, 0);
+        Assert.Equal(new[] { "My music", "Spotify" }, apps.Select(a => a.ToString()));
+    }
+
+    [Fact]
+    public void SpotifyOpensItsAppWithTheWebAsFallback()
+    {
+        var spotify = TvApp.Defaults().Single(a => a.Name == "Spotify");
+        Assert.Equal(TvAppKind.Program, spotify.Kind);
+        Assert.Equal("spotify:", spotify.Target);
+        Assert.True(new TvApp { Target = spotify.Fallback }.IsUsable);
+    }
 }

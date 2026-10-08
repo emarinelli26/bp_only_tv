@@ -23,10 +23,12 @@ sealed class RunningApp : IDisposable
     {
         App = app;
         _log = log;
+        Key = app.Key;
     }
 
     public TvApp App { get; }
-    public string Key => App.Key;
+    /// <summary>The tile it was opened from (a web fallback runs under its program tile's key).</summary>
+    public string Key { get; init; } = "";
     public bool IsWeb => App.Kind == TvAppKind.Web;
 
     /// <summary>Browser profile folder of a web tile.</summary>

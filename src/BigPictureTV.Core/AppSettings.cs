@@ -91,6 +91,9 @@ public sealed class AppSettings
     /// <summary>Tiles of the TV menu, in order.</summary>
     public List<TvApp> TvMenuApps { get; set; } = TvApp.Defaults();
 
+    /// <summary>Which <see cref="TvApp.DefaultsVersion"/> the tiles were last brought up to (0 in files from before).</summary>
+    public int TvMenuVersion { get; set; }
+
     /// <summary>Browser for web tiles (Edge or Chrome). Empty: Microsoft Edge, which comes with Windows.</summary>
     public string BrowserPath { get; set; } = "";
 
@@ -117,20 +120,30 @@ public sealed class AppSettings
     /// <summary>Loads settings, or returns defaults if the file is missing or broken.</summary>
     public static AppSettings Load(string file, ILog? log = null)
     {
-        if (!File.Exists(file)) return new AppSettings();
+        if (!File.Exists(file)) return Fresh();
         try
         {
             var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(file), JsonOptions) ?? new AppSettings();
             settings.TvMenuApps ??= TvApp.Defaults();
             TvApp.UpdateUserAgents(settings.TvMenuApps);
+            if (settings.TvMenuVersion < TvApp.DefaultsVersion)
+            {
+                // New tiles appear once; removing them afterwards sticks.
+                TvApp.AddNewDefaults(settings.TvMenuApps, settings.TvMenuVersion);
+                settings.TvMenuVersion = TvApp.DefaultsVersion;
+                try { settings.Save(file); }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { log?.Write($"Couldn't save the new TV menu tiles: {e.Message}"); }
+            }
             return settings;
         }
         catch (Exception e) when (e is JsonException or IOException)
         {
             log?.Write($"Settings file unreadable ({e.Message}), using defaults.");
-            return new AppSettings();
+            return Fresh();
         }
     }
+
+    static AppSettings Fresh() => new() { TvMenuVersion = TvApp.DefaultsVersion };
 
     public void Save(string file)
     {

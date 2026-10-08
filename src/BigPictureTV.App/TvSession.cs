@@ -33,6 +33,9 @@ sealed class TvSession : IDisposable
     readonly PadMapper _mapper = new(); // only touched on the controller thread
     readonly Dictionary<string, RunningApp> _running = new();
 
+    readonly NowPlaying _nowPlaying;
+    readonly System.Windows.Forms.Timer _mediaTimer = new() { Interval = 1500 };
+    bool _readingMedia;
     ITvMenuView? _view;
     ITvKeyboardView? _keyboardView;
     readonly OnScreenKeyboard _keyboard = new(); // only touched on the UI thread
@@ -53,6 +56,8 @@ sealed class TvSession : IDisposable
         _openBigPicture = openBigPicture;
         _menuButtonName = menuButtonName;
         _signal = new MenuSignal(() => Post(Open));
+        _nowPlaying = new NowPlaying(log);
+        _mediaTimer.Tick += (_, _) => _ = RefreshMediaAsync();
     }
 
     /// <summary>True while the menu or an app opened from it is in front.</summary>
@@ -88,17 +93,80 @@ sealed class TvSession : IDisposable
             _view.Chosen += app => Guard($"Opening {app}", () => Choose(app));
             _view.CloseRequested += app => Guard($"Closing {app}", () => CloseApp(app.Key));
             _view.BackRequested += () => Guard("Leaving the menu", Back);
+            _view.MediaRequested += action => _ = MediaAsync(action);
+            _view.AudioRequested += () => Guard("Changing the sound output", NextAudioOutput);
         }
         var apps = AppSettings.Load(AppPaths.SettingsFile, _log).TvMenuApps; // picks up hand edits
         _menuShown = true;
         _view.Show(apps, _running.Keys.ToList(), _current?.App, message, _menuButtonName());
+        ShowAudioOutput();
+        if (!_mediaTimer.Enabled)
+        {
+            _mediaTimer.Start();
+            _ = RefreshMediaAsync();
+        }
         MemoryTrim.Soon();
     }
 
     void HideMenu()
     {
         _menuShown = false;
+        _mediaTimer.Stop();
         _view?.Hide();
+    }
+
+    // "Now playing" in the menu, read again every moment while it shows.
+    async Task RefreshMediaAsync()
+    {
+        if (_readingMedia) return;
+        _readingMedia = true;
+        try
+        {
+            var info = await _nowPlaying.ReadAsync();
+            if (_menuShown) _view?.ShowNowPlaying(info);
+        }
+        catch (Exception e)
+        {
+            _log.Write($"Reading what is playing failed: {e.Message}");
+        }
+        finally
+        {
+            _readingMedia = false;
+        }
+    }
+
+    async Task MediaAsync(PadAction action)
+    {
+        try
+        {
+            await _nowPlaying.SendAsync(action);
+            await Task.Delay(400); // let the player catch up before showing it
+            await RefreshMediaAsync();
+        }
+        catch (Exception e)
+        {
+            _log.Write($"Media button failed: {e.Message}");
+        }
+    }
+
+    void ShowAudioOutput()
+    {
+        var outputs = AudioOutputs.List();
+        string? id = AudioOutputs.DefaultId();
+        _view?.ShowAudioOutput(outputs.Count == 0 ? null : outputs.FirstOrDefault(o => o.Id == id)?.Name ?? "");
+    }
+
+    // A on the sound output: the next one, like pressing a TV remote's input button.
+    // Back on the desktop the tray app puts the sound where it was before the TV.
+    void NextAudioOutput()
+    {
+        var outputs = AudioOutputs.List();
+        if (outputs.Count < 2) return;
+        string? id = AudioOutputs.DefaultId();
+        int at = outputs.ToList().FindIndex(o => o.Id == id);
+        var next = outputs[(at + 1) % outputs.Count];
+        _log.Write(AudioOutputs.SetDefault(next.Id) ? $"TV menu: sound moved to {next}." : $"TV menu: Windows refused to move the sound to {next}.");
+        ShowAudioOutput();
     }
 
     // B in the menu: back to the app in front, or out of the menu.
@@ -150,7 +218,7 @@ sealed class TvSession : IDisposable
         _log.Write($"Back to {app.App}.");
     }
 
-    RunningApp? StartWeb(TvApp app, out string? error)
+    RunningApp? StartWeb(TvApp app, out string? error, string? key = null)
     {
         error = null;
         string? browser = BrowserFinder.Find(AppSettings.Load(AppPaths.SettingsFile, _log).BrowserPath);
@@ -185,7 +253,7 @@ sealed class TvSession : IDisposable
             _log.Write($"Opening {app} failed: {e.Message}");
             return null;
         }
-        var running = new RunningApp(app, _log) { Profile = profile, BrowserName = name };
+        var running = new RunningApp(app, _log) { Profile = profile, BrowserName = name, Key = key ?? app.Key };
         _ = Task.Run(() => ConnectAsync(running));
         return running;
     }
@@ -275,6 +343,14 @@ sealed class TvSession : IDisposable
     RunningApp? StartProgram(TvApp app, out string? error)
     {
         error = null;
+        string link = app.Target.Trim();
+        if (app.Fallback.Trim().Length > 0 && LinkHandlers.IsLink(link) && !LinkHandlers.Has(link))
+        {
+            // Not installed (Spotify's app): its web page instead, on the same tile.
+            _log.Write($"Nothing opens {link}; opening {app.Fallback.Trim()} instead.");
+            var web = new TvApp { Name = app.Name, Kind = TvAppKind.Web, Target = app.Fallback.Trim(), Color = app.Color };
+            return StartWeb(web, out error, key: app.Key);
+        }
         try
         {
             string target = Environment.ExpandEnvironmentVariables(app.Target.Trim().Trim('"'));
@@ -283,12 +359,33 @@ sealed class TvSession : IDisposable
             var process = Process.Start(start);
             var running = new RunningApp(app, _log);
             if (process != null) running.Follow(process, HandOff);
+            if (app.ProcessName.Trim().Length > 0) _ = Task.Run(() => FindProcessAsync(running, app.ProcessName.Trim()));
             return running;
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException or UnauthorizedAccessException)
         {
             _log.Write($"Opening {app} failed: {e.Message}");
             return null;
+        }
+    }
+
+    // A program opened through a link, or by a launcher that quits: find it by
+    // name once its window is up, to bring it back and notice when it closes.
+    async Task FindProcessAsync(RunningApp app, string name)
+    {
+        for (int i = 0; i < 30 && !app.Gone; i++)
+        {
+            await Task.Delay(500);
+            var found = Process.GetProcessesByName(name);
+            var main = found.FirstOrDefault(p => { try { return p.MainWindowHandle != IntPtr.Zero; } catch (InvalidOperationException) { return false; } });
+            foreach (var p in found) if (!ReferenceEquals(p, main)) p.Dispose();
+            if (main == null) continue;
+            Post(() =>
+            {
+                if (app.Gone || app.Process != null) main.Dispose(); // the launch gave a process after all
+                else app.Follow(main);
+            });
+            return;
         }
     }
 
