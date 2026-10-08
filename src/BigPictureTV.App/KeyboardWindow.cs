@@ -1,5 +1,4 @@
 using System;
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
@@ -68,8 +67,7 @@ sealed class KeyboardWindow : Window, ITvKeyboardView
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
-        var handle = new WindowInteropHelper(this).Handle;
-        SetWindowLongPtr(handle, GWL_EXSTYLE, new IntPtr(GetWindowLongPtr(handle, GWL_EXSTYLE).ToInt64() | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW));
+        NoActivate.Apply(new WindowInteropHelper(this).Handle);
     }
 
     public void Show(OnScreenKeyboard keyboard)
@@ -123,13 +121,4 @@ sealed class KeyboardWindow : Window, ITvKeyboardView
             _rows.Children.Add(row);
         }
     }
-
-    const int GWL_EXSTYLE = -20;
-    const long WS_EX_NOACTIVATE = 0x08000000, WS_EX_TOOLWINDOW = 0x80;
-
-    [DllImport("user32.dll")]
-    static extern IntPtr GetWindowLongPtr(IntPtr window, int index);
-
-    [DllImport("user32.dll")]
-    static extern IntPtr SetWindowLongPtr(IntPtr window, int index, IntPtr value);
 }

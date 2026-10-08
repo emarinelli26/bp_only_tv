@@ -46,4 +46,7 @@ static class WpfDialogs
 
     /// <summary>The on-screen keyboard, made once and kept (hidden) like the menu.</summary>
     public static ITvKeyboardView CreateKeyboard() => new KeyboardWindow();
+
+    /// <summary>The volume overlay, made once and kept (hidden).</summary>
+    public static ITvVolumeView CreateVolume() => new VolumeWindow();
 }

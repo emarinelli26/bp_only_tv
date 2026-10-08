@@ -41,6 +41,24 @@ static class BrowserProcesses
         return found;
     }
 
+    /// <summary>Command line and parent of a process, or nulls if it's gone or hidden.</summary>
+    public static (string? CommandLine, int Parent) Describe(int processId)
+    {
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(
+                $"SELECT CommandLine, ParentProcessId FROM Win32_Process WHERE ProcessId = {processId}");
+            using var results = searcher.Get();
+            foreach (ManagementBaseObject row in results)
+                using (row)
+                    return (row["CommandLine"] as string, Convert.ToInt32(row["ParentProcessId"]));
+        }
+        catch (Exception e) when (e is ManagementException or System.Runtime.InteropServices.COMException or UnauthorizedAccessException)
+        {
+        }
+        return (null, 0);
+    }
+
     /// <summary>Closes the browser on this profile: politely first, so it keeps logins, then by force.</summary>
     public static void Close(string browserName, string profileDir, ILog log)
     {

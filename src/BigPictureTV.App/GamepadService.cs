@@ -61,7 +61,7 @@ sealed class GamepadService : IDisposable
     /// <summary>
     /// Called on the watcher thread with the buttons held across all
     /// controllers, on every read while one is connected; left stick pushes
-    /// count as the cross. Null: nobody listens. Safe to set from any thread.
+    /// count as the cross, right stick up/down as RStickUp/RStickDown. Null: nobody listens. Safe to set from any thread.
     /// </summary>
     public Action<GamepadButtons>? Listener { get; set; }
 
@@ -184,15 +184,17 @@ sealed class GamepadService : IDisposable
             if (state.Gamepad.bLeftTrigger >= TriggerThreshold) buttons |= GamepadButtons.LT;
             if (state.Gamepad.bRightTrigger >= TriggerThreshold) buttons |= GamepadButtons.RT;
             var g = state.Gamepad;
+            if (g.sThumbRY >= StickThreshold && Math.Abs((int)g.sThumbRY) > Math.Abs((int)g.sThumbRX)) stick |= GamepadButtons.RStickUp;
+            else if (g.sThumbRY <= -StickThreshold && Math.Abs((int)g.sThumbRY) > Math.Abs((int)g.sThumbRX)) stick |= GamepadButtons.RStickDown;
             if (Math.Abs((int)g.sThumbLX) >= Math.Abs((int)g.sThumbLY))
             {
-                if (g.sThumbLX >= StickThreshold) stick = GamepadButtons.Right;
-                else if (g.sThumbLX <= -StickThreshold) stick = GamepadButtons.Left;
+                if (g.sThumbLX >= StickThreshold) stick |= GamepadButtons.Right;
+                else if (g.sThumbLX <= -StickThreshold) stick |= GamepadButtons.Left;
             }
             else
             {
-                if (g.sThumbLY >= StickThreshold) stick = GamepadButtons.Up;
-                else if (g.sThumbLY <= -StickThreshold) stick = GamepadButtons.Down;
+                if (g.sThumbLY >= StickThreshold) stick |= GamepadButtons.Up;
+                else if (g.sThumbLY <= -StickThreshold) stick |= GamepadButtons.Down;
             }
             return buttons;
         }

@@ -50,9 +50,13 @@ public static class BrowserCommand
     /// True for the command line of the browser's main process for this
     /// profile; its helper processes (tabs, GPU...) carry a --type= switch.
     /// </summary>
-    public static bool IsMainProcessFor(string? commandLine, string profileDir)
+    public static bool IsMainProcessFor(string? commandLine, string profileDir) =>
+        commandLine != null && !commandLine.Contains("--type=", StringComparison.Ordinal) && UsesProfile(commandLine, profileDir);
+
+    /// <summary>True for any process of the browser on this profile, the main one or a helper (its sound, its pages).</summary>
+    public static bool UsesProfile(string? commandLine, string profileDir)
     {
-        if (string.IsNullOrEmpty(commandLine) || commandLine.Contains("--type=", StringComparison.Ordinal)) return false;
+        if (string.IsNullOrEmpty(commandLine)) return false;
         string dir = profileDir.TrimEnd('\\', '/');
         int at = commandLine.IndexOf("--user-data-dir=", StringComparison.OrdinalIgnoreCase);
         if (at < 0) return false;

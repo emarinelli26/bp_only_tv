@@ -109,10 +109,13 @@ sealed class SdlPads : IDisposable
 
     static GamepadButtons Stick(IntPtr pad)
     {
+        int rx = SDL_GameControllerGetAxis(pad, 2), ry = SDL_GameControllerGetAxis(pad, 3);
+        var right = Math.Abs(ry) <= Math.Abs(rx) ? GamepadButtons.None
+            : ry >= StickThreshold ? GamepadButtons.RStickDown : ry <= -StickThreshold ? GamepadButtons.RStickUp : GamepadButtons.None;
         int x = SDL_GameControllerGetAxis(pad, 0), y = SDL_GameControllerGetAxis(pad, 1); // SDL: down is positive
         if (Math.Abs(x) >= Math.Abs(y))
-            return x >= StickThreshold ? GamepadButtons.Right : x <= -StickThreshold ? GamepadButtons.Left : GamepadButtons.None;
-        return y >= StickThreshold ? GamepadButtons.Down : y <= -StickThreshold ? GamepadButtons.Up : GamepadButtons.None;
+            return right | (x >= StickThreshold ? GamepadButtons.Right : x <= -StickThreshold ? GamepadButtons.Left : GamepadButtons.None);
+        return right | (y >= StickThreshold ? GamepadButtons.Down : y <= -StickThreshold ? GamepadButtons.Up : GamepadButtons.None);
     }
 
     public void BuzzAll()

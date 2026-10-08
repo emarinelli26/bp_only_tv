@@ -81,6 +81,11 @@ public sealed class TvApp
 
     public override string ToString() => Name.Length > 0 ? Name : Kind.ToString();
 
+    /// <summary>A music tile (Spotify, YouTube Music...): the right stick turns its volume.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsMusic => Kind is TvAppKind.Web or TvAppKind.Program &&
+                           (MediaSessionPicker.IsMusicApp(Name) || MediaSessionPicker.IsMusicApp(Target) || MediaSessionPicker.IsMusicApp(ProcessName));
+
     public static List<TvApp> Defaults() => new()
     {
         new() { Name = "YouTube", Target = "https://www.youtube.com/tv", UserAgent = SmartTvUserAgent, BackKey = "Esc", Color = "#C4302B" },

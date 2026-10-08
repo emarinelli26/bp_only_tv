@@ -38,6 +38,8 @@ sealed class TvSession : IDisposable
     bool _readingMedia;
     ITvMenuView? _view;
     ITvKeyboardView? _keyboardView;
+    ITvVolumeView? _volumeView;
+    readonly Dictionary<int, bool> _musicProcesses = new(); // process id: plays a music tile's sound
     readonly OnScreenKeyboard _keyboard = new(); // only touched on the UI thread
     volatile bool _menuShown, _keyboardShown;
     volatile RunningApp? _current; // the app in front, driven by the controller
@@ -95,6 +97,7 @@ sealed class TvSession : IDisposable
             _view.BackRequested += () => Guard("Leaving the menu", Back);
             _view.MediaRequested += action => _ = MediaAsync(action);
             _view.AudioRequested += () => Guard("Changing the sound output", NextAudioOutput);
+            _view.VolumeRequested += (windows, direction) => Guard("Changing the volume", () => ChangeVolume(windows, direction));
         }
         var apps = AppSettings.Load(AppPaths.SettingsFile, _log).TvMenuApps; // picks up hand edits
         _menuShown = true;
@@ -149,6 +152,46 @@ sealed class TvSession : IDisposable
         }
     }
 
+    const float VolumeStep = 0.02f;
+
+    // Only the music's own volume (its slider in Windows' volume mixer), so
+    // games and videos keep theirs; on the sound output card, the PC's.
+    void ChangeVolume(bool windows, int direction)
+    {
+        _volumeView ??= WpfDialogs.CreateVolume();
+        if (windows)
+        {
+            if (AudioOutputs.ChangeVolume(direction * VolumeStep) is { } pc)
+                _volumeView.Show(pc.Muted ? S.WindowsVolume + "  🔇" : S.WindowsVolume, pc.Percent);
+            return;
+        }
+        int? music = AudioOutputs.ChangeAppVolume(IsMusicProcess, direction * VolumeStep);
+        _volumeView.Show(music == null ? S.NoMusicPlaying : S.MusicVolume, music);
+    }
+
+    // Spotify's app (opened from the menu or not), or the browser behind a
+    // music tile (YouTube Music), found by its profile or as a child of it.
+    bool IsMusicProcess(int processId)
+    {
+        if (_musicProcesses.TryGetValue(processId, out bool known)) return known;
+        string name = "";
+        try
+        {
+            using var process = Process.GetProcessById(processId);
+            name = process.ProcessName;
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException) { }
+        bool music = MediaSessionPicker.IsMusicApp(name);
+        var webMusic = _running.Values.Where(a => !a.Gone && a.IsWeb && a.App.IsMusic && a.Profile != null).ToList();
+        if (!music && webMusic.Any(a => string.Equals(a.BrowserName, name, StringComparison.OrdinalIgnoreCase)))
+        {
+            var (commandLine, parent) = BrowserProcesses.Describe(processId);
+            music = webMusic.Any(a => BrowserCommand.UsesProfile(commandLine, a.Profile!) || a.ProcessId == parent);
+        }
+        _musicProcesses[processId] = music;
+        return music;
+    }
+
     void ShowAudioOutput()
     {
         var outputs = AudioOutputs.List();
@@ -188,6 +231,7 @@ sealed class TvSession : IDisposable
             return;
         }
         _log.Write($"TV menu: opening {app} ({app.Kind}).");
+        _musicProcesses.Clear();
         switch (app.Kind)
         {
             case TvAppKind.Desktop:
@@ -446,6 +490,13 @@ sealed class TvSession : IDisposable
             if (_view is { } view) foreach (var action in actions) view.Handle(action);
             return;
         }
+        // The right stick turns the music's volume over any app; the menu
+        // got it above (there, on the sound output it turns the PC's).
+        foreach (var action in actions)
+            if (action is PadAction.VolumeUp or PadAction.VolumeDown)
+                Post(() => ChangeVolume(windows: false, action == PadAction.VolumeUp ? 1 : -1));
+        actions.RemoveAll(a => a is PadAction.VolumeUp or PadAction.VolumeDown);
+        if (actions.Count == 0) return;
         if (_keyboardShown)
         {
             Post(() => { foreach (var action in actions) OnKeyboardPad(action); });

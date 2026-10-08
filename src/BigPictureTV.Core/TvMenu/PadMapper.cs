@@ -19,6 +19,8 @@ public enum PadAction
     PageDown,   // RT
     Option,     // X: in the menu, closes an open app
     Keyboard,   // R3: the on-screen keyboard
+    VolumeUp,   // right stick up
+    VolumeDown, // right stick down
 }
 
 /// <summary>
@@ -52,6 +54,14 @@ public sealed class PadMapper
         (GamepadButtons.RT, PadAction.PageDown),
     };
 
+    // The right stick turns the PC's volume, repeating while held.
+    public static readonly TimeSpan VolumeRepeatEvery = TimeSpan.FromMilliseconds(120);
+    static readonly (GamepadButtons Button, PadAction Action)[] Volume =
+    {
+        (GamepadButtons.RStickUp, PadAction.VolumeUp),
+        (GamepadButtons.RStickDown, PadAction.VolumeDown),
+    };
+
     static readonly (GamepadButtons Button, PadAction Action)[] Directions =
     {
         (GamepadButtons.Up, PadAction.Up),
@@ -61,8 +71,8 @@ public sealed class PadMapper
     };
 
     GamepadButtons _previous;
-    PadAction? _direction, _trigger;
-    DateTime _nextRepeat, _nextTriggerRepeat;
+    PadAction? _direction, _trigger, _volume;
+    DateTime _nextRepeat, _nextTriggerRepeat, _nextVolumeRepeat;
 
     /// <summary>Call with the buttons held now (stick pushes count as the cross). Returns what happened since the last call.</summary>
     public List<PadAction> Update(GamepadButtons pressed, DateTime now)
@@ -97,6 +107,25 @@ public sealed class PadMapper
             actions.Add(trigger.Value);
         }
 
+        PadAction? volume = null;
+        foreach (var (button, action) in Volume)
+            if (pressed.HasFlag(button)) { volume = action; break; }
+        if (volume == null)
+        {
+            _volume = null;
+        }
+        else if (volume != _volume)
+        {
+            _volume = volume;
+            _nextVolumeRepeat = now + VolumeRepeatEvery * 2;
+            actions.Add(volume.Value);
+        }
+        else if (now >= _nextVolumeRepeat)
+        {
+            _nextVolumeRepeat = now + VolumeRepeatEvery;
+            actions.Add(volume.Value);
+        }
+
         // One direction at a time; the first pressed wins until let go.
         PadAction? direction = null;
         foreach (var (button, action) in Directions)
@@ -121,5 +150,6 @@ public sealed class PadMapper
         return actions;
     }
 
-    const GamepadButtons DirectionMask = GamepadButtons.Up | GamepadButtons.Down | GamepadButtons.Left | GamepadButtons.Right;
+    const GamepadButtons DirectionMask = GamepadButtons.Up | GamepadButtons.Down | GamepadButtons.Left | GamepadButtons.Right |
+        GamepadButtons.RStickUp | GamepadButtons.RStickDown;
 }

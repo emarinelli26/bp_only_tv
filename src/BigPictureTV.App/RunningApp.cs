@@ -38,6 +38,16 @@ sealed class RunningApp : IDisposable
     public string BrowserName { get; init; } = "";
 
     public Process? Process { get; private set; }
+
+    /// <summary>Id of <see cref="Process"/>, or 0.</summary>
+    public int ProcessId
+    {
+        get
+        {
+            try { return Process?.Id ?? 0; }
+            catch (InvalidOperationException) { return 0; }
+        }
+    }
     public CdpPage? Page { get; private set; }
     public bool Gone => _gone;
 

@@ -45,6 +45,9 @@ interface ITvMenuView
 
     /// <summary>A on the sound output: move the sound to the next output.</summary>
     event Action AudioRequested;
+
+    /// <summary>Right stick up (+1) or down (-1): the PC's volume when on the sound output, else the music's.</summary>
+    event Action<bool, int> VolumeRequested;
 }
 
 /// <summary>
@@ -79,6 +82,7 @@ sealed class TvMenuWindow : Window, ITvMenuView
     public event Action? BackRequested;
     public event Action<PadAction>? MediaRequested;
     public event Action? AudioRequested;
+    public event Action<bool, int>? VolumeRequested;
 
     public TvMenuWindow()
     {
@@ -356,8 +360,8 @@ sealed class TvMenuWindow : Window, ITvMenuView
             }
             _selected = index;
             _hints.Text = bar[_barItem] == _musicCard
-                ? string.Join("        ", S.HintPlayPause, S.HintSkip, S.HintBackToTiles)
-                : string.Join("        ", S.HintNextOutput, S.HintBackToTiles);
+                ? string.Join("        ", S.HintPlayPause, S.HintSkip, S.HintMusicVolume, S.HintBackToTiles)
+                : string.Join("        ", S.HintNextOutput, S.HintWindowsVolume, S.HintBackToTiles);
             return;
         }
 
@@ -393,6 +397,11 @@ sealed class TvMenuWindow : Window, ITvMenuView
                 break;
             case PadAction.Previous or PadAction.Next or PadAction.PlayPause:
                 if (_nowPlaying != null) MediaRequested?.Invoke(action);
+                break;
+            case PadAction.VolumeUp or PadAction.VolumeDown:
+                var bar = BarItems();
+                bool windows = _inBar && _barItem < bar.Count && bar[_barItem] == _audioCard;
+                VolumeRequested?.Invoke(windows, action == PadAction.VolumeUp ? 1 : -1);
                 break;
             case PadAction.Back:
                 BackRequested?.Invoke();

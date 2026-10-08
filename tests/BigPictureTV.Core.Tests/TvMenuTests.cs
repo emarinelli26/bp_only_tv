@@ -369,4 +369,35 @@ public class TvMenuTests
         Assert.Equal("spotify:", spotify.Target);
         Assert.True(new TvApp { Target = spotify.Fallback }.IsUsable);
     }
+
+    [Fact]
+    public void RightStickTurnsTheVolumeAndRepeatsWhileHeld()
+    {
+        var mapper = new PadMapper();
+        Assert.Equal(new[] { PadAction.VolumeUp }, mapper.Update(GamepadButtons.RStickUp, T0));
+        Assert.Empty(mapper.Update(GamepadButtons.RStickUp, T0.AddMilliseconds(100)));
+        Assert.Equal(new[] { PadAction.VolumeUp }, mapper.Update(GamepadButtons.RStickUp, T0.AddMilliseconds(250)));
+        Assert.Equal(new[] { PadAction.VolumeDown }, mapper.Update(GamepadButtons.RStickDown, T0.AddMilliseconds(300)));
+        // Held with a button, it is no combo: the button still counts.
+        Assert.Equal(new[] { PadAction.Accept }, mapper.Update(GamepadButtons.RStickDown | GamepadButtons.A, T0.AddMilliseconds(310)));
+    }
+
+    [Fact]
+    public void TheRightStickIsNeverPartOfACombo() =>
+        Assert.Null(GamepadCombo.ParseAny("RStickUp+A"));
+
+    [Fact]
+    public void MusicTilesAreKnownByName()
+    {
+        var apps = TvApp.Defaults();
+        Assert.Equal(new[] { "Spotify", "YouTube Music" }, apps.Where(a => a.IsMusic).Select(a => a.Name));
+    }
+
+    [Theory]
+    [InlineData("msedge.exe --type=utility --utility-sub-type=audio.mojom.AudioService --user-data-dir=\"C:\\D\\Browser\\YouTube Music\" --field-trial", true)]
+    [InlineData("msedge.exe --user-data-dir=\"C:\\D\\Browser\\YouTube Music\"", true)]
+    [InlineData("msedge.exe --type=utility --user-data-dir=\"C:\\D\\Browser\\YouTube\"", false)]
+    [InlineData(null, false)]
+    public void HelperProcessesBelongToTheirProfile(string? commandLine, bool expected) =>
+        Assert.Equal(expected, BrowserCommand.UsesProfile(commandLine, "C:\\D\\Browser\\YouTube Music"));
 }
