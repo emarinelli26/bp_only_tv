@@ -18,6 +18,7 @@ public enum PadAction
     PageUp,     // LT
     PageDown,   // RT
     Option,     // X: in the menu, closes an open app
+    Keyboard,   // R3: the on-screen keyboard
 }
 
 /// <summary>
@@ -40,6 +41,7 @@ public sealed class PadMapper
         (GamepadButtons.Start, PadAction.PlayPause),
         (GamepadButtons.LB, PadAction.Previous),
         (GamepadButtons.RB, PadAction.Next),
+        (GamepadButtons.RS, PadAction.Keyboard),
     };
 
     // Triggers repeat while held too (rewind/fast forward, scroll), a bit slower.

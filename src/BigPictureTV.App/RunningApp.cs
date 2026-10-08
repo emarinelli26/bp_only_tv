@@ -196,7 +196,7 @@ sealed class RunningApp : IDisposable
     // Pages with a TV interface (YouTube TV) understand a TV remote's keys,
     // like a console's app does: LB/RB previous/next video, LT/RT rewind and
     // fast forward. Other pages get keyboard keys to move around instead.
-    bool TvInterface => App.UserAgent.Trim().Length > 0;
+    public bool TvInterface => App.UserAgent.Trim().Length > 0;
 
     Hotkey? KeysFor(PadAction action) => action switch
     {

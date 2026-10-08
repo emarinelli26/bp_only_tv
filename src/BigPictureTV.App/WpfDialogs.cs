@@ -43,4 +43,7 @@ static class WpfDialogs
 
     /// <summary>The TV menu, made once and kept (hidden) for the rest of the run.</summary>
     public static ITvMenuView CreateTvMenu() => new TvMenuWindow();
+
+    /// <summary>The on-screen keyboard, made once and kept (hidden) like the menu.</summary>
+    public static ITvKeyboardView CreateKeyboard() => new KeyboardWindow();
 }

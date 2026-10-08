@@ -105,6 +105,7 @@ public sealed class Strings
     public string BrowserNotFound { get; init; } = "";
     public string TvMenuGroup { get; init; } = "";
     public string ShortcutOpensTvMenu { get; init; } = "";
+    public string KeyboardHints { get; init; } = "";
 
     static Strings English() => new()
     {
@@ -205,6 +206,7 @@ public sealed class Strings
         BrowserNotFound = "Microsoft Edge wasn't found. Set another browser as BrowserPath in settings.json.",
         TvMenuGroup = "TV menu",
         ShortcutOpensTvMenu = "The keyboard shortcut and the controller combo open the TV menu (YouTube, Crunchyroll, Big Picture…)",
+        KeyboardHints = "A type   X delete   Y space   L2 capitals   R2 symbols   L1/R1 move   Start done   B close",
     };
 
     static Strings Spanish() => new()
@@ -306,5 +308,6 @@ public sealed class Strings
         BrowserNotFound = "No se encontró Microsoft Edge. Poné otro navegador en BrowserPath dentro de settings.json.",
         TvMenuGroup = "Menú TV",
         ShortcutOpensTvMenu = "El atajo de teclado y el combo del mando abren el Menú TV (YouTube, Crunchyroll, Big Picture…)",
+        KeyboardHints = "A escribir   X borrar   Y espacio   L2 mayúsculas   R2 símbolos   L1/R1 mover   Start listo   B cerrar",
     };
 }

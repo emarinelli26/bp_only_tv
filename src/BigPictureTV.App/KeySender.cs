@@ -9,10 +9,11 @@ namespace BigPictureTV.App;
 /// <summary>Types keys into whatever window is in front, as if pressed on a keyboard.</summary>
 static class KeySender
 {
+    public const uint VK_BACK = 0x08, VK_RETURN = 0x0D, VK_LEFT = 0x25, VK_RIGHT = 0x27;
     public const uint VK_MEDIA_PLAY_PAUSE = 0xB3;
 
     const uint INPUT_KEYBOARD = 1;
-    const uint KEYEVENTF_EXTENDEDKEY = 0x1, KEYEVENTF_KEYUP = 0x2;
+    const uint KEYEVENTF_EXTENDEDKEY = 0x1, KEYEVENTF_KEYUP = 0x2, KEYEVENTF_UNICODE = 0x4;
 
     // Keys that live outside the old keypad and need the "extended" flag, or
     // Windows reads the arrows as number pad keys.
@@ -37,6 +38,20 @@ static class KeySender
         for (int i = mods.Count - 1; i >= 0; i--) inputs.Add(Key(mods[i], up: true));
         SendInput((uint)inputs.Count, inputs.ToArray(), Marshal.SizeOf<INPUT>());
     }
+
+    /// <summary>Types text as characters, whatever the keyboard layout (accents and ñ included).</summary>
+    public static void Type(string text)
+    {
+        var inputs = new List<INPUT>();
+        foreach (char c in text)
+        {
+            inputs.Add(Unicode(c, up: false));
+            inputs.Add(Unicode(c, up: true));
+        }
+        if (inputs.Count > 0) SendInput((uint)inputs.Count, inputs.ToArray(), Marshal.SizeOf<INPUT>());
+    }
+
+    public static void Send(uint key) => Send(new Hotkey(KeyModifiers.None, key));
 
     /// <summary>Id of the process that owns the window in front, or 0.</summary>
     public static int ForegroundProcessId()
@@ -95,6 +110,12 @@ static class KeySender
             wScan = (ushort)MapVirtualKey(vk, 0),
             dwFlags = (up ? KEYEVENTF_KEYUP : 0) | (Extended.Contains(vk) ? KEYEVENTF_EXTENDEDKEY : 0),
         },
+    };
+
+    static INPUT Unicode(char c, bool up) => new()
+    {
+        type = INPUT_KEYBOARD,
+        ki = new KEYBDINPUT { wScan = c, dwFlags = KEYEVENTF_UNICODE | (up ? KEYEVENTF_KEYUP : 0) },
     };
 
     [StructLayout(LayoutKind.Sequential)]

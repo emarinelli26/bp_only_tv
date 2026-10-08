@@ -34,7 +34,9 @@ sealed class TvSession : IDisposable
     readonly Dictionary<string, RunningApp> _running = new();
 
     ITvMenuView? _view;
-    volatile bool _menuShown;
+    ITvKeyboardView? _keyboardView;
+    readonly OnScreenKeyboard _keyboard = new(); // only touched on the UI thread
+    volatile bool _menuShown, _keyboardShown;
     volatile RunningApp? _current; // the app in front, driven by the controller
     bool _session, _switchedHere;
 
@@ -79,6 +81,7 @@ sealed class TvSession : IDisposable
             _log.Write("TV menu opened.");
         }
         Prune();
+        HideKeyboard();
         if (_view == null)
         {
             _view = WpfDialogs.CreateTvMenu();
@@ -297,6 +300,7 @@ sealed class TvSession : IDisposable
         _log.Write($"{app.App} was closed.");
         if (!ReferenceEquals(_current, app)) return;
         _current = null;
+        HideKeyboard();
         if (_session) ShowMenu(); // it was in front: back to the menu
     }
 
@@ -314,6 +318,7 @@ sealed class TvSession : IDisposable
     void End(bool toDesktop)
     {
         HideMenu();
+        HideKeyboard();
         _current = null;
         if (!_session) return;
         _session = false;
@@ -344,8 +349,106 @@ sealed class TvSession : IDisposable
             if (_view is { } view) foreach (var action in actions) view.Handle(action);
             return;
         }
-        if (_current is { Gone: false } app)
-            foreach (var action in actions) app.Send(action);
+        if (_keyboardShown)
+        {
+            Post(() => { foreach (var action in actions) OnKeyboardPad(action); });
+            return;
+        }
+        if (_current is not { Gone: false } app) return;
+        foreach (var action in actions)
+        {
+            if (action == PadAction.Keyboard)
+            {
+                if (!_gamepad.MenuButton.HasFlag(GamepadButtons.RS)) Post(ShowKeyboard); // R3 may open the menu instead
+                continue;
+            }
+            app.Send(action);
+            // Y on a page without its own keyboard (YouTube TV has one): the
+            // extension puts the focus in the search box, ready to type.
+            if (action == PadAction.Search && app.IsWeb && !app.TvInterface) Post(ShowKeyboard);
+        }
+    }
+
+    // The on-screen keyboard types into the window in front, so it only
+    // shows over an app opened from the menu.
+    void ShowKeyboard()
+    {
+        if (_menuShown || _current is not { Gone: false }) return;
+        if (!_keyboardShown) _keyboard.Reset();
+        _keyboardView ??= WpfDialogs.CreateKeyboard();
+        _keyboardShown = true;
+        _keyboardView.Show(_keyboard);
+    }
+
+    void HideKeyboard()
+    {
+        _keyboardShown = false;
+        _keyboardView?.Hide();
+    }
+
+    // On the UI thread, while the keyboard shows.
+    void OnKeyboardPad(PadAction action)
+    {
+        if (!_keyboardShown) return;
+        if (_current is not { Gone: false })
+        {
+            HideKeyboard();
+            return;
+        }
+        switch (action)
+        {
+            case PadAction.Up or PadAction.Down or PadAction.Left or PadAction.Right:
+                _keyboard.Move(action);
+                break;
+            case PadAction.Accept:
+                if (_keyboard.Press() is { } output) Type(output);
+                break;
+            case PadAction.Option:
+                KeySender.Send(KeySender.VK_BACK);
+                return;
+            case PadAction.Search:
+                KeySender.Type(" ");
+                return;
+            case PadAction.PlayPause:
+                Type(new KeyOutput(KeyKind.Enter));
+                break;
+            case PadAction.PageUp:
+                _keyboard.ToggleCapitals();
+                break;
+            case PadAction.PageDown:
+                _keyboard.ToggleSymbols();
+                break;
+            case PadAction.Previous:
+                KeySender.Send(KeySender.VK_LEFT);
+                return;
+            case PadAction.Next:
+                KeySender.Send(KeySender.VK_RIGHT);
+                return;
+            case PadAction.Back or PadAction.Keyboard:
+                HideKeyboard();
+                return;
+        }
+        if (_keyboardShown) _keyboardView?.Show(_keyboard);
+    }
+
+    void Type(KeyOutput output)
+    {
+        switch (output.Kind)
+        {
+            case KeyKind.Text:
+                KeySender.Type(output.Text);
+                break;
+            case KeyKind.Backspace:
+                KeySender.Send(KeySender.VK_BACK);
+                break;
+            case KeyKind.Enter:
+                KeySender.Send(KeySender.VK_RETURN);
+                HideKeyboard();
+                break;
+            case KeyKind.Close:
+                HideKeyboard();
+                break;
+        }
     }
 
     void Post(Action action) => _ui.Post(_ => Guard("TV menu", action), null);
