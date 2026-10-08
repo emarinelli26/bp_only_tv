@@ -24,6 +24,9 @@ sealed class GamepadService : IDisposable
     const short StickThreshold = 16000; // about half way
     static readonly TimeSpan PollEvery = TimeSpan.FromMilliseconds(33);
     static readonly TimeSpan ProbeEvery = TimeSpan.FromSeconds(2);
+    // With no controller at all, SDL is started over this often so it sees
+    // one plugged in or paired after the app started.
+    static readonly TimeSpan SdlRestartEvery = TimeSpan.FromSeconds(6);
     // One controller can show up twice (Steam presents a PlayStation one as
     // an Xbox one too): a shortcut seen again this soon is the same press.
     static readonly TimeSpan SamePress = TimeSpan.FromMilliseconds(500);
@@ -91,6 +94,8 @@ sealed class GamepadService : IDisposable
         try
         {
             var nextProbe = DateTime.MinValue;
+            var nextSdlRestart = DateTime.UtcNow + SdlRestartEvery;
+            bool restartLogged = false;
             while (!_stop.IsSet)
             {
                 var now = DateTime.UtcNow;
@@ -134,6 +139,18 @@ sealed class GamepadService : IDisposable
                     }
                     _pressed = pressed;
                     if (pressed >= 0) Listener?.Invoke((GamepadButtons)pressed | stick);
+                    else if (probe && _sdl != null && now >= nextSdlRestart)
+                    {
+                        nextSdlRestart = now + SdlRestartEvery;
+                        if (!restartLogged) _log.Write("No controller connected; looking for PlayStation/Switch controllers again every few seconds.");
+                        restartLogged = true;
+                        if (!_sdl.Restart())
+                        {
+                            _sdl.Dispose();
+                            _sdl = null;
+                        }
+                    }
+                    if (pressed >= 0) restartLogged = false;
                 }
                 catch (Exception e)
                 {

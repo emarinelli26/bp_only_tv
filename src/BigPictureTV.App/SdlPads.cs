@@ -118,6 +118,22 @@ sealed class SdlPads : IDisposable
         return right | (y >= StickThreshold ? GamepadButtons.Down : y <= -StickThreshold ? GamepadButtons.Up : GamepadButtons.None);
     }
 
+    /// <summary>
+    /// Starts SDL's controller support over, so it lists the controllers
+    /// again. Its own notice of a newly plugged or paired controller doesn't
+    /// always come (seen with one connected after the app started). False
+    /// if SDL won't start again; then stop using it.
+    /// </summary>
+    public bool Restart()
+    {
+        foreach (var pad in _open.Values) SDL_GameControllerClose(pad);
+        _open.Clear();
+        SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER);
+        if (SDL_Init(SDL_INIT_GAMECONTROLLER) == 0) return true;
+        _log.Write($"SDL didn't start again ({Utf8(SDL_GetError())}); using XInput for controllers.");
+        return false;
+    }
+
     public void BuzzAll()
     {
         foreach (var pad in _open.Values) SDL_GameControllerRumble(pad, 30000, 30000, 200);
