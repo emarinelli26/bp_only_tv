@@ -391,9 +391,12 @@ sealed class TvSession : IDisposable
             // Only TV pages get the DevTools channel: Cloudflare's check (on
             // Crunchyroll) never passes while the browser has it open. The
             // others get the navigation extension instead.
+            // Edge installs it from its store by itself (asking once per
+            // profile to turn it on); other browsers load the copy on disk.
             string extension = Path.Combine(AppPaths.DataDir, "Browser", "Extension");
             SpatialNav.Write(extension);
-            var start = new ProcessStartInfo(browser, BrowserCommand.Arguments(app, profile, extension))
+            bool fromStore = string.Equals(name, "msedge", StringComparison.OrdinalIgnoreCase) && EdgeStore.Register(_log);
+            var start = new ProcessStartInfo(browser, BrowserCommand.Arguments(app, profile, fromStore ? null : extension))
             {
                 UseShellExecute = false,
             };

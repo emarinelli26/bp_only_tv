@@ -9,6 +9,12 @@ namespace BigPictureTV.Core.TvMenu;
 /// </summary>
 public static class SpatialNav
 {
+    /// <summary>The extension's id on the Edge Add-ons store.</summary>
+    public const string EdgeStoreId = "knkhlmkoeeggiphflliamjhdpjbaioga";
+
+    /// <summary>Where Edge gets store extensions from, for one installed by a program.</summary>
+    public const string EdgeStoreUpdateUrl = "https://edge.microsoft.com/extensionwebstorebase/v1/crx";
+
     public static readonly string[] Files =
     {
         "manifest.json", "background.js", "spatial-nav.js", "player.js", "icon16.png", "icon48.png", "icon128.png",
