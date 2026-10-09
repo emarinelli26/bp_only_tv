@@ -45,6 +45,22 @@ public class IconLinksTests
     }
 
     [Fact]
+    public void ReadsTheSizeOfPngAndTheLargestPictureOfAnIco()
+    {
+        var png = new byte[24];
+        new byte[] { 0x89, 0x50, 0x4E, 0x47, 13, 10, 26, 10 }.CopyTo(png, 0);
+        png[18] = 0; png[19] = 144; // width 144
+        Assert.Equal(144, IconLinks.PixelSize(png));
+
+        var ico = new byte[6 + 3 * 16];
+        ico[2] = 1; ico[4] = 3;
+        ico[6] = 16; ico[22] = 0; ico[38] = 48; // 16, 256 (0), 48
+        Assert.Equal(256, IconLinks.PixelSize(ico));
+
+        Assert.Equal(0, IconLinks.PixelSize(new byte[] { 0xFF, 0xD8, 0xFF, 0, 0, 0, 0, 0, 0 })); // JPEG: unknown
+    }
+
+    [Fact]
     public void OnlyImagesTheMenuCanDrawAreAccepted()
     {
         Assert.True(IconLinks.IsImage(new byte[] { 0x89, 0x50, 0x4E, 0x47, 13, 10, 26, 10, 0 }));

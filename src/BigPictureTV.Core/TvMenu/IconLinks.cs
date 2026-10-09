@@ -54,6 +54,27 @@ public static class IconLinks
         return best > 0 ? best : touch ? 180 : 32;
     }
 
+    /// <summary>
+    /// Width in pixels of the image (the largest one in an .ico), from its
+    /// header; 0 if it can't tell (JPEG, or not an image).
+    /// </summary>
+    public static int PixelSize(ReadOnlySpan<byte> bytes)
+    {
+        if (!IsImage(bytes)) return 0;
+        if (bytes[0] == 0x89 && bytes.Length >= 24) // PNG: IHDR width, big-endian
+            return (bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19];
+        if (bytes[0] == 0 && bytes[2] == 1) // ICO: a 16-byte entry per picture; width 0 means 256
+        {
+            int count = bytes[4] | (bytes[5] << 8), best = 0;
+            for (int i = 0; i < count && 6 + i * 16 < bytes.Length; i++)
+                best = Math.Max(best, bytes[6 + i * 16] == 0 ? 256 : bytes[6 + i * 16]);
+            return best;
+        }
+        if (bytes[0] == (byte)'G') return bytes[6] | (bytes[7] << 8);
+        if (bytes[0] == (byte)'B' && bytes.Length >= 22) return bytes[18] | (bytes[19] << 8) | (bytes[20] << 16) | (bytes[21] << 24);
+        return 0;
+    }
+
     /// <summary>True if the bytes are an image the menu can draw (PNG, ICO, JPEG, GIF, BMP).</summary>
     public static bool IsImage(ReadOnlySpan<byte> bytes) =>
         bytes.Length > 8 && (

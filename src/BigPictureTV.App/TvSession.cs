@@ -232,7 +232,8 @@ sealed class TvSession : IDisposable
 
     // Windows keeps an app's volume for the next time it runs, for the whole
     // program: YouTube Music left low would leave Edge low. So a music tile
-    // gets its volume back before it closes.
+    // gets its volume back when it closes (see CloseApp), or when this app
+    // quits and leaves it playing.
     void RestoreVolume(RunningApp app)
     {
         if (!_volumeBefore.Remove(app.Key, out int before) || app.Gone) return;
@@ -612,11 +613,15 @@ sealed class TvSession : IDisposable
     void CloseApp(string key)
     {
         if (!_running.TryGetValue(key, out var app)) return;
-        RestoreVolume(app);
+        // Its volume goes back once it is closed: before, the music would
+        // play loud for the moment it takes to close.
+        var volumes = _volumeBefore.Remove(key, out int before) ? AudioOutputs.HoldAppVolumes(pid => MusicTileOf(pid) == key) : null;
         _running.Remove(key);
         if (ReferenceEquals(_current, app)) _current = null;
         _log.Write($"Closing {app.App}.");
         app.Close();
+        if (volumes != null)
+            _log.Write($"{app.App}: volume back to {before}% ({volumes.Set(before)} of {volumes.Count} sound sessions).");
         if (_menuShown) ShowMenu(); // redraw without the "open" mark
     }
 

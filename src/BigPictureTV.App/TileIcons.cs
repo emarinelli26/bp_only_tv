@@ -96,21 +96,47 @@ sealed class TileIcons
     static bool IsWeb(string text) => text.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || text.StartsWith("http://", StringComparison.OrdinalIgnoreCase);
 
     // The icon a site declares for itself, the largest it offers.
-    Task<byte[]?> SiteIconAsync(Uri page) => CachedAsync("site|" + page.GetLeftPart(UriPartial.Authority), async () =>
+    // Version 2: picks the sharpest icon instead of the first found (YouTube's
+    // TV page led to a small one that looked blurry on the tile).
+    Task<byte[]?> SiteIconAsync(Uri page) => CachedAsync("site2|" + page.GetLeftPart(UriPartial.Authority), async () =>
     {
-        string html = "";
+        // The tile's page and the site's home page: a TV page (youtube.com/tv)
+        // may declare fewer icons than the home page.
+        var candidates = new List<Uri>();
+        foreach (var source in new[] { page, new Uri(page.GetLeftPart(UriPartial.Authority) + "/") }.Distinct())
+            foreach (var uri in IconLinks.Candidates(await PageAsync(source), source))
+                if (!candidates.Contains(uri)) candidates.Add(uri);
+        // A site that only answers browsers that pass its bot check
+        // (Crunchyroll's Cloudflare): Google's icon service has it too.
+        candidates.Add(new Uri($"https://www.google.com/s2/favicons?sz=256&domain={Uri.EscapeDataString(page.Host)}"));
+
+        byte[]? best = null;
+        int bestSize = 0;
+        foreach (var candidate in candidates.Take(12))
+        {
+            if (await DownloadAsync(candidate) is not { } bytes) continue;
+            int size = IconLinks.PixelSize(bytes);
+            if (best == null || size > bestSize)
+            {
+                best = bytes;
+                bestSize = size;
+            }
+            if (bestSize >= SharpEnough) break;
+        }
+        return best;
+    });
+
+    const int SharpEnough = 128; // the logo shows at about 80 px, more on a 4K TV
+
+    static async Task<string> PageAsync(Uri page)
+    {
         try
         {
             using var response = await Http.GetAsync(page, HttpCompletionOption.ResponseHeadersRead);
-            if (response.IsSuccessStatusCode) html = await ReadTextAsync(response);
+            return response.IsSuccessStatusCode ? await ReadTextAsync(response) : "";
         }
-        catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { }
-        foreach (var candidate in IconLinks.Candidates(html, page))
-            if (await DownloadAsync(candidate) is { } bytes) return bytes;
-        // A site that only answers browsers that pass its bot check
-        // (Crunchyroll's Cloudflare): ask Google's icon service for it.
-        return await DownloadAsync(new Uri($"https://www.google.com/s2/favicons?sz=128&domain={Uri.EscapeDataString(page.Host)}"));
-    });
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { return ""; }
+    }
 
     // From disk if found before (and not too old), else found now and kept.
     async Task<byte[]?> CachedAsync(string source, Func<Task<byte[]?>> find)
