@@ -133,6 +133,15 @@ public class TvMenuTests
     }
 
     [Fact]
+    public void TheExtensionManifestMeetsTheStoreLimits()
+    {
+        using var manifest = System.Text.Json.JsonDocument.Parse(SpatialNav.Read("manifest.json"));
+        var root = manifest.RootElement;
+        Assert.InRange(root.GetProperty("description").GetString()!.Length, 1, 132); // Edge Add-ons rejects longer
+        Assert.InRange(root.GetProperty("name").GetString()!.Length, 1, 45);
+    }
+
+    [Fact]
     public void TheNavigationExtensionShipsWithTheApp()
     {
         Assert.Contains("\"spatial-nav.js\"", SpatialNav.Read("manifest.json"));
