@@ -34,6 +34,7 @@ sealed class TvSession : IDisposable
     readonly Dictionary<string, RunningApp> _running = new();
 
     readonly NowPlaying _nowPlaying;
+    readonly TileIcons _icons;
     readonly System.Windows.Forms.Timer _mediaTimer = new() { Interval = 1500 };
     bool _readingMedia;
     ITvMenuView? _view;
@@ -50,7 +51,8 @@ sealed class TvSession : IDisposable
     IntPtr _origin;
     string _originTitle = "";
     bool _inOrigin; // it is the one in front, not an app from the menu
-    bool _session, _switchedHere;
+    bool _picking;  // the menu shows the windows to go back to, not the tiles
+    bool _session, _switchedHere, _disposed;
 
     /// <param name="enterTv">Switches to the TV unless already there; Switched is true if it did.</param>
     /// <param name="menuButtonName">How to call the menu button in the hints, or "" if there is none.</param>
@@ -66,6 +68,7 @@ sealed class TvSession : IDisposable
         _menuButtonName = menuButtonName;
         _signal = new MenuSignal(() => Post(Open));
         _nowPlaying = new NowPlaying(log);
+        _icons = new TileIcons(log);
         _mediaTimer.Tick += (_, _) => _ = RefreshMediaAsync();
     }
 
@@ -106,6 +109,7 @@ sealed class TvSession : IDisposable
             _view.Chosen += app => Guard($"Opening {app}", () => Choose(app));
             _view.CloseRequested += app => Guard($"Closing {app}", () => CloseApp(app.Key));
             _view.BackRequested += () => Guard("Leaving the menu", Back);
+            _view.LostFront += () => Post(OnLostFront);
             _view.MediaRequested += action => _ = MediaAsync(action);
             _view.AudioRequested += () => Guard("Changing the sound output", NextAudioOutput);
             _view.VolumeRequested += (windows, direction) => Guard("Changing the volume", () => ChangeVolume(windows, direction));
@@ -114,8 +118,11 @@ sealed class TvSession : IDisposable
         var apps = AppSettings.Load(AppPaths.SettingsFile, _log).TvMenuApps; // picks up hand edits
         var origin = OriginTile();
         if (origin != null) apps.Insert(0, origin);
+        _picking = false;
         _menuShown = true;
+        _view.ShowIcons(_icons.Known);
         _view.Show(apps, _running.Keys.ToList(), _inOrigin && origin != null ? origin : _current?.App, message, _menuButtonName());
+        _icons.Prepare(apps, () => Post(() => { if (_menuShown) _view?.ShowIcons(_icons.Known); }));
         ShowAudioOutput();
         if (!_mediaTimer.Enabled)
         {
@@ -146,11 +153,66 @@ sealed class TvSession : IDisposable
 
     bool OriginShown => AppWindows.IsShown(_origin);
 
-    TvApp? OriginTile()
+    TvApp? OriginTile() => OriginShown ? WindowTile(_origin, _originTitle) : null;
+
+    static TvApp WindowTile(IntPtr window, string title, string color = "#107C10")
     {
-        if (!OriginShown) return null;
-        string name = _originTitle.Length > 40 ? _originTitle[..39] + "…" : _originTitle;
-        return new TvApp { Kind = TvAppKind.Game, Name = name, Target = _origin.ToString(), Color = "#107C10" };
+        title = title.Trim();
+        string name = title.Length > 40 ? title[..39] + "…" : title;
+        return new TvApp { Kind = TvAppKind.Game, Name = name, Target = window.ToString(), Color = color };
+    }
+
+    // A on the game tile: the windows open right now, the one the menu
+    // opened over first, in case that one is a launcher or an alert and not
+    // the game itself. A again goes back to it.
+    void PickWindow()
+    {
+        var windows = AppWindows.Switchable(except: Environment.ProcessId);
+        windows.Remove(_origin);
+        if (OriginShown) windows.Insert(0, _origin);
+        if (windows.Count <= 1)
+        {
+            ReturnToOrigin();
+            return;
+        }
+        var tiles = windows.Take(12).Select(w => w == _origin ? OriginTile()! : WindowTile(w, AppWindows.TitleOf(w), "")).ToList();
+        _picking = true;
+        _view!.Show(tiles, Array.Empty<string>(), tiles[0], S.TvMenuPickWindow, _menuButtonName());
+        _icons.Prepare(tiles, () => Post(() => { if (_menuShown) _view?.ShowIcons(_icons.Known); }));
+    }
+
+    void GoToWindow(TvApp tile)
+    {
+        if (!long.TryParse(tile.Target, out long handle) || !AppWindows.IsShown(new IntPtr(handle)))
+        {
+            ShowMenu();
+            return;
+        }
+        _origin = new IntPtr(handle);
+        _originTitle = AppWindows.TitleOf(_origin);
+        ReturnToOrigin();
+    }
+
+    // Something else came to the front (a click on the game behind, a game's
+    // own alert): the menu goes away instead of staying on top and taking
+    // the controller. The menu button brings it back.
+    void OnLostFront()
+    {
+        if (!_menuShown) return;
+        var front = KeySender.ForegroundWindow();
+        if (front == IntPtr.Zero || AppWindows.ProcessOf(front) == Environment.ProcessId) return; // ours (the keyboard), or mid-switch
+        HideMenu();
+        if (_running.Values.FirstOrDefault(r => !r.Gone && r.OwnsForegroundWindow()) is { } app)
+        {
+            _current = app;
+            _inOrigin = false;
+        }
+        else if (front == _origin)
+        {
+            _current = null;
+            _inOrigin = true;
+        }
+        _log.Write($"TV menu hidden: {AppWindows.TitleOf(front).Trim()} came to the front.");
     }
 
     void ReturnToOrigin()
@@ -166,6 +228,7 @@ sealed class TvSession : IDisposable
     void HideMenu()
     {
         _menuShown = false;
+        _picking = false;
         _mediaTimer.Stop();
         _view?.Hide();
     }
@@ -228,7 +291,8 @@ sealed class TvSession : IDisposable
 
     // Windows keeps an app's volume for the next time it runs, for the whole
     // program: YouTube Music left low would leave Edge low. So a music tile
-    // gets its volume back before it closes.
+    // gets its volume back when it closes (see CloseApp), or when this app
+    // quits and leaves it playing.
     void RestoreVolume(RunningApp app)
     {
         if (!_volumeBefore.Remove(app.Key, out int before) || app.Gone) return;
@@ -297,6 +361,11 @@ sealed class TvSession : IDisposable
     // game the menu opened over), or out of the menu.
     void Back()
     {
+        if (_picking)
+        {
+            ShowMenu();
+            return;
+        }
         if (_inOrigin && OriginShown)
         {
             ReturnToOrigin();
@@ -324,7 +393,8 @@ sealed class TvSession : IDisposable
         }
         if (app.Kind == TvAppKind.Game)
         {
-            ReturnToOrigin();
+            if (_picking) GoToWindow(app);
+            else PickWindow();
             return;
         }
         _log.Write($"TV menu: opening {app} ({app.Kind}).");
@@ -387,9 +457,15 @@ sealed class TvSession : IDisposable
             // Only TV pages get the DevTools channel: Cloudflare's check (on
             // Crunchyroll) never passes while the browser has it open. The
             // others get the navigation extension instead.
+            // Edge installs it from its store by itself, but turned off until
+            // someone turns it on in edge://extensions (an app window never
+            // asks). Until then, and in other browsers, the copy on disk is
+            // loaded, so the cross works from the first time.
             string extension = Path.Combine(AppPaths.DataDir, "Browser", "Extension");
             SpatialNav.Write(extension);
-            var start = new ProcessStartInfo(browser, BrowserCommand.Arguments(app, profile, extension))
+            bool fromStore = string.Equals(name, "msedge", StringComparison.OrdinalIgnoreCase) && EdgeStore.Register(_log) && EdgeStore.OnIn(profile);
+            _log.Write(fromStore ? $"{app}: Edge's navigation extension (from its store) is on." : $"{app}: loading the navigation extension from {extension}.");
+            var start = new ProcessStartInfo(browser, BrowserCommand.Arguments(app, profile, fromStore ? null : extension))
             {
                 UseShellExecute = false,
             };
@@ -605,11 +681,15 @@ sealed class TvSession : IDisposable
     void CloseApp(string key)
     {
         if (!_running.TryGetValue(key, out var app)) return;
-        RestoreVolume(app);
+        // Its volume goes back once it is closed: before, the music would
+        // play loud for the moment it takes to close.
+        var volumes = _volumeBefore.Remove(key, out int before) ? AudioOutputs.HoldAppVolumes(pid => MusicTileOf(pid) == key) : null;
         _running.Remove(key);
         if (ReferenceEquals(_current, app)) _current = null;
         _log.Write($"Closing {app.App}.");
         app.Close();
+        if (volumes != null)
+            _log.Write($"{app.App}: volume back to {before}% ({volumes.Set(before)} of {volumes.Count} sound sessions).");
         if (_menuShown) ShowMenu(); // redraw without the "open" mark
     }
 
@@ -772,7 +852,8 @@ sealed class TvSession : IDisposable
         }
     }
 
-    void Post(Action action) => _ui.Post(_ => Guard("TV menu", action), null);
+    // Nothing runs after Dispose (the app is closing): CloseAll can still be queued then.
+    void Post(Action action) => _ui.Post(_ => { if (!_disposed) Guard("TV menu", action); }, null);
 
     // Anything going wrong in the menu is written to the log, never takes the app down.
     void Guard(string what, Action action)
@@ -783,6 +864,7 @@ sealed class TvSession : IDisposable
 
     public void Dispose()
     {
+        _disposed = true;
         _gamepad.Listener = null;
         _signal.Dispose();
         foreach (var app in _running.Values)

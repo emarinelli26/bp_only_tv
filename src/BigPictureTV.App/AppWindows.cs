@@ -34,6 +34,26 @@ static class AppWindows
         return found;
     }
 
+    /// <summary>
+    /// The windows someone could go back to, front to back, like Alt+Tab
+    /// shows them: visible, with a title, not owned by another window, not a
+    /// tool window, not hidden by Windows (background store apps), nor of
+    /// the process <paramref name="except"/>.
+    /// </summary>
+    public static List<IntPtr> Switchable(int except)
+    {
+        var found = new List<IntPtr>();
+        EnumWindows((window, _) =>
+        {
+            if (!IsWindowVisible(window) || GetWindowTextLength(window) == 0 || GetWindow(window, GW_OWNER) != IntPtr.Zero) return true;
+            if ((GetWindowLongPtr(window, GWL_EXSTYLE).ToInt64() & WS_EX_TOOLWINDOW) != 0 || IsShell(window) || ProcessOf(window) == except) return true;
+            if (DwmGetWindowAttribute(window, DWMWA_CLOAKED, out int cloaked, sizeof(int)) == 0 && cloaked != 0) return true;
+            found.Add(window);
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
+
     public static bool Exists(IntPtr window) => window != IntPtr.Zero && IsWindow(window);
 
     /// <summary>Exists and is on screen (minimized counts).</summary>
@@ -84,8 +104,18 @@ static class AppWindows
         if (Exists(window)) PostMessage(window, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
     }
 
-    const uint WM_CLOSE = 0x0010, MONITOR_DEFAULTTONEAREST = 2;
-    const int SW_RESTORE = 9;
+    const uint WM_CLOSE = 0x0010, MONITOR_DEFAULTTONEAREST = 2, GW_OWNER = 4;
+    const int SW_RESTORE = 9, GWL_EXSTYLE = -20, DWMWA_CLOAKED = 14;
+    const long WS_EX_TOOLWINDOW = 0x80;
+
+    [DllImport("user32.dll")]
+    static extern IntPtr GetWindow(IntPtr window, uint command);
+
+    [DllImport("user32.dll")]
+    static extern IntPtr GetWindowLongPtr(IntPtr window, int index);
+
+    [DllImport("dwmapi.dll")]
+    static extern int DwmGetWindowAttribute(IntPtr window, int attribute, out int value, int size);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     static extern int GetWindowText(IntPtr window, StringBuilder text, int max);

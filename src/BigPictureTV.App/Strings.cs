@@ -86,6 +86,7 @@ public sealed class Strings
     public string TvMenu { get; init; } = "";
     public string TvMenuOpen { get; init; } = "";
     public string TvMenuDesktop { get; init; } = "";
+    public string TvMenuPickWindow { get; init; } = "";
     public string HintOpen { get; init; } = "";
     public string HintResume { get; init; } = "";
     public string HintCloseApp { get; init; } = "";
@@ -199,6 +200,7 @@ public sealed class Strings
         TvMenu = "TV menu",
         TvMenuOpen = "Open the TV menu",
         TvMenuDesktop = "Desktop",
+        TvMenuPickWindow = "Which window do you want to go back to?",
         HintOpen = "A  Open",
         HintResume = "A  Go back to it",
         HintCloseApp = "X  Close it",
@@ -313,6 +315,7 @@ public sealed class Strings
         TvMenu = "Menú TV",
         TvMenuOpen = "Abrir el Menú TV",
         TvMenuDesktop = "Escritorio",
+        TvMenuPickWindow = "¿A qué ventana querés volver?",
         HintOpen = "A  Abrir",
         HintResume = "A  Volver a la app",
         HintCloseApp = "X  Cerrarla",

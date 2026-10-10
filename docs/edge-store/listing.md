@@ -1,6 +1,6 @@
 # Edge Add-ons listing: TV menu navigation
 
-Upload `tv-menu-extension.zip` (CI artifact `tv-menu-extension`) and `logo-300.png`.
+Upload the CI artifact `tv-menu-extension-store-package.zip` as downloaded (do not unzip it), and `logo-300.png` from `tv-menu-extension-store-listing`.
 
 **Name:** TV menu navigation
 

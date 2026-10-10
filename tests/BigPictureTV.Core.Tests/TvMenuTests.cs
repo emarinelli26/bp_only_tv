@@ -132,6 +132,29 @@ public class TvMenuTests
         Assert.Empty(mapper.Update(GamepadButtons.Back, T0.AddSeconds(5)));
     }
 
+    [Theory]
+    [InlineData("""{"extensions":{"settings":{"knkhlmkoeeggiphflliamjhdpjbaioga":{"location":1}}}}""", true)]
+    [InlineData("""{"extensions":{"settings":{"knkhlmkoeeggiphflliamjhdpjbaioga":{"state":1,"disable_reasons":0}}}}""", true)]
+    [InlineData("""{"extensions":{"settings":{"knkhlmkoeeggiphflliamjhdpjbaioga":{"disable_reasons":[8192]}}}}""", false)]
+    [InlineData("""{"extensions":{"settings":{"knkhlmkoeeggiphflliamjhdpjbaioga":{"disable_reasons":8192}}}}""", false)]
+    [InlineData("""{"extensions":{"settings":{"knkhlmkoeeggiphflliamjhdpjbaioga":{"state":0}}}}""", false)]
+    [InlineData("""{"extensions":{"settings":{"otherextension":{}}}}""", null)]
+    [InlineData("""{"browser":{}}""", null)]
+    [InlineData("not json", null)]
+    public void TellsWhetherTheStoreCopyIsOnInAProfile(string preferences, bool? on)
+    {
+        Assert.Equal(on, SpatialNav.StoreCopyOn(preferences));
+    }
+
+    [Fact]
+    public void TheExtensionManifestMeetsTheStoreLimits()
+    {
+        using var manifest = System.Text.Json.JsonDocument.Parse(SpatialNav.Read("manifest.json"));
+        var root = manifest.RootElement;
+        Assert.InRange(root.GetProperty("description").GetString()!.Length, 1, 132); // Edge Add-ons rejects longer
+        Assert.InRange(root.GetProperty("name").GetString()!.Length, 1, 45);
+    }
+
     [Fact]
     public void TheNavigationExtensionShipsWithTheApp()
     {
