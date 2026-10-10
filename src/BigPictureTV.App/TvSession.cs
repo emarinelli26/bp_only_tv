@@ -463,13 +463,15 @@ sealed class TvSession : IDisposable
             // loaded, so the cross works from the first time.
             string extension = Path.Combine(AppPaths.DataDir, "Browser", "Extension");
             SpatialNav.Write(extension);
-            bool fromStore = string.Equals(name, "msedge", StringComparison.OrdinalIgnoreCase) && EdgeStore.Register(_log) && EdgeStore.OnIn(profile);
+            bool edge = string.Equals(name, "msedge", StringComparison.OrdinalIgnoreCase) && EdgeStore.Register(_log);
+            bool fromStore = edge && EdgeStore.OnIn(profile);
             _log.Write(fromStore ? $"{app}: Edge's navigation extension (from its store) is on." : $"{app}: loading the navigation extension from {extension}.");
             var start = new ProcessStartInfo(browser, BrowserCommand.Arguments(app, profile, fromStore ? null : extension))
             {
                 UseShellExecute = false,
             };
             Process.Start(start)?.Dispose(); // it often hands over and quits; the real one is found below
+            if (edge && !fromStore && app.UserAgent.Trim().Length == 0) EdgeStore.AskToTurnOn(browser, profile, app.ToString(), _log);
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException or UnauthorizedAccessException)
         {
