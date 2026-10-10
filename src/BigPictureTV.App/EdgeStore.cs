@@ -35,4 +35,20 @@ static class EdgeStore
         }
         return _registered;
     }
+
+    /// <summary>True if the store's copy is installed and turned on in this Edge profile (user data folder).</summary>
+    public static bool OnIn(string profileDir)
+    {
+        bool? on = null;
+        foreach (var file in new[] { "Secure Preferences", "Preferences" })
+        {
+            string path = System.IO.Path.Combine(profileDir, "Default", file);
+            try
+            {
+                if (System.IO.File.Exists(path)) on ??= SpatialNav.StoreCopyOn(System.IO.File.ReadAllText(path));
+            }
+            catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException) { }
+        }
+        return on == true;
+    }
 }

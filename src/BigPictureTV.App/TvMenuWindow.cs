@@ -37,6 +37,9 @@ interface ITvMenuView
     /// <summary>B or Esc.</summary>
     event Action BackRequested;
 
+    /// <summary>Another window came to the front (a click on the game, a game's own alert).</summary>
+    event Action LostFront;
+
     /// <summary>Shows what is playing on the PC, or hides the strip (null).</summary>
     void ShowNowPlaying(NowPlayingInfo? info);
 
@@ -86,6 +89,7 @@ sealed class TvMenuWindow : Window, ITvMenuView
     public event Action<TvApp>? Chosen;
     public event Action<TvApp>? CloseRequested;
     public event Action? BackRequested;
+    public event Action? LostFront;
     public event Action<PadAction>? MediaRequested;
     public event Action? AudioRequested;
     public event Action<bool, int>? VolumeRequested;
@@ -148,6 +152,7 @@ sealed class TvMenuWindow : Window, ITvMenuView
 
         _clockTimer.Tick += (_, _) => UpdateClock();
         PreviewKeyDown += OnKey;
+        Deactivated += (_, _) => { if (IsVisible) LostFront?.Invoke(); };
         // Keyboard input in a WPF window that lives in the tray's WinForms loop.
         System.Windows.Forms.Integration.ElementHost.EnableModelessKeyboardInterop(this);
     }
