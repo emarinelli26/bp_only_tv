@@ -129,6 +129,7 @@ sealed class TvSession : IDisposable
             _mediaTimer.Start();
             _ = RefreshMediaAsync();
         }
+        AppWindows.ParkCursor();
         MemoryTrim.Soon();
     }
 
@@ -418,6 +419,7 @@ sealed class TvSession : IDisposable
         _running[app.Key] = started;
         started.Exited += gone => Post(() => OnExited(gone));
         _current = started;
+        AppWindows.ParkCursor();
         _inOrigin = false;
         HideMenu();
     }
@@ -738,6 +740,8 @@ sealed class TvSession : IDisposable
     {
         var actions = _mapper.Update(buttons, DateTime.UtcNow);
         if (actions.Count == 0) return;
+        // The controller is in use over the menu or its apps: the mouse goes out of the way.
+        if (_menuShown || _keyboardShown || _current is { Gone: false }) AppWindows.ParkCursor();
         if (_menuShown)
         {
             if (_view is { } view) foreach (var action in actions) view.Handle(action);

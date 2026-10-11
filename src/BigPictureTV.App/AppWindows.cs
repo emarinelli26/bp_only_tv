@@ -98,13 +98,38 @@ static class AppWindows
                rect.Right >= info.rcMonitor.Right && rect.Bottom >= info.rcMonitor.Bottom;
     }
 
+    /// <summary>
+    /// Moves the mouse pointer to the bottom right corner of the display the
+    /// window in front is on, where its arrow falls off the screen and it
+    /// rests on nothing: driven by the controller, a pointer left over a
+    /// page highlights cards, opens previews and keeps a video's controls up.
+    /// </summary>
+    public static void ParkCursor()
+    {
+        var monitor = MonitorFromWindow(KeySender.ForegroundWindow(), MONITOR_DEFAULTTOPRIMARY);
+        var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+        if (!GetMonitorInfo(monitor, ref info)) return;
+        int x = info.rcMonitor.Right - 1, y = info.rcMonitor.Bottom - 1;
+        if (GetCursorPos(out var at) && at.X == x && at.Y == y) return;
+        SetCursorPos(x, y);
+    }
+
     /// <summary>Asks the window to close, like its X button.</summary>
     public static void Close(IntPtr window)
     {
         if (Exists(window)) PostMessage(window, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
     }
 
-    const uint WM_CLOSE = 0x0010, MONITOR_DEFAULTTONEAREST = 2, GW_OWNER = 4;
+    const uint WM_CLOSE = 0x0010, MONITOR_DEFAULTTOPRIMARY = 1, MONITOR_DEFAULTTONEAREST = 2, GW_OWNER = 4;
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct POINT { public int X, Y; }
+
+    [DllImport("user32.dll")]
+    static extern bool GetCursorPos(out POINT point);
+
+    [DllImport("user32.dll")]
+    static extern bool SetCursorPos(int x, int y);
     const int SW_RESTORE = 9, GWL_EXSTYLE = -20, DWMWA_CLOAKED = 14;
     const long WS_EX_TOOLWINDOW = 0x80;
 
