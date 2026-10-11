@@ -33,6 +33,12 @@ public interface IDisplayConfig
 
     /// <summary>Applies Windows' Duplicate arrangement.</summary>
     int ApplyClone();
+
+    /// <summary>
+    /// Applies the arrangement Windows remembers for the displays connected
+    /// now (the user's own; the TV layouts are never saved to it).
+    /// </summary>
+    int ApplyRemembered();
 }
 
 /// <summary>The real implementation, on top of the CCD API. Windows only.</summary>
@@ -158,6 +164,8 @@ public sealed class DisplayConfig : IDisplayConfig
     public int ApplyExtend() => SetDisplayConfig(0, null, 0, null, SDC_APPLY | SDC_TOPOLOGY_EXTEND);
 
     public int ApplyClone() => SetDisplayConfig(0, null, 0, null, SDC_APPLY | SDC_TOPOLOGY_CLONE);
+
+    public int ApplyRemembered() => SetDisplayConfig(0, null, 0, null, SDC_APPLY | SDC_USE_DATABASE_CURRENT);
 
     static bool PathIs(PATH_INFO p, string devicePath) =>
         string.Equals(GetTargetName(p.targetInfo.adapterId, p.targetInfo.id).monitorDevicePath,

@@ -115,6 +115,7 @@ internal static class NativeMethods
     public const uint QDC_ONLY_ACTIVE_PATHS = 0x2;
     public const uint SDC_TOPOLOGY_CLONE = 0x2;
     public const uint SDC_TOPOLOGY_EXTEND = 0x4;
+    public const uint SDC_USE_DATABASE_CURRENT = 0xF; // internal | clone | extend | external
     public const uint SDC_USE_SUPPLIED_DISPLAY_CONFIG = 0x20;
     public const uint SDC_APPLY = 0x80;
     public const uint SDC_SAVE_TO_DATABASE = 0x200;

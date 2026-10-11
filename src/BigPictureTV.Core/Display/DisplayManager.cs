@@ -86,7 +86,7 @@ public sealed class DisplayManager : IDisplaySwitcher
         if (!_store.HasSaved)
         {
             var current = _display.QueryActive();
-            _store.Save(current);
+            _store.Save(current, displays.Where(x => x.Active).Select(x => x.DevicePath));
             _log.Write($"Saved current layout ({current.Paths.Length} active display(s)).");
         }
 
@@ -185,12 +185,38 @@ public sealed class DisplayManager : IDisplaySwitcher
                     _log.Write("Restored saved layout.");
                     return;
                 }
-                _log.Write($"Saved layout could not be applied (error {err}), falling back to Extend.");
+                _log.Write($"Saved layout could not be applied (error {err}).");
             }
             catch (Exception e) when (e is FormatException or IOException or System.Text.Json.JsonException)
             {
-                _log.Write($"Saved layout unreadable ({e.Message}), falling back to Extend.");
+                _log.Write($"Saved layout unreadable ({e.Message}).");
             }
+
+            // Only one display was on (a monitor alone): turn on just that one,
+            // the same way the TV is turned on alone.
+            var active = _store.ActiveDisplays();
+            if (active.Count == 1 && _display.BuildSingleDisplay(active[0]) is { } single)
+            {
+                int err = _display.Apply(single, saveToDatabase: true);
+                if (err == 0)
+                {
+                    ForgetSavedLayout();
+                    _log.Write("Restored the desktop's only display.");
+                    return;
+                }
+                _log.Write($"Turning on the desktop's only display failed (error {err}).");
+            }
+
+            // The arrangement Windows remembers for these displays: the user's,
+            // since the TV layouts are applied without saving them there.
+            int remembered = _display.ApplyRemembered();
+            if (remembered == 0)
+            {
+                ForgetSavedLayout();
+                _log.Write("Restored the layout Windows remembers for these displays.");
+                return;
+            }
+            _log.Write($"Restoring the layout Windows remembers failed (error {remembered}), falling back to Extend.");
         }
 
         // Adapter ids change after a reboot or driver update, which invalidates

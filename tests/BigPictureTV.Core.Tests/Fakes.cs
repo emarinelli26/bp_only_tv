@@ -68,10 +68,22 @@ sealed class FakeDisplayConfig : IDisplayConfig
         return new Layout { Paths = new[] { path }, Modes = new MODE_INFO[2] };
     }
 
+    /// <summary>Results for the next applies, in order; then <see cref="ApplyResult"/>.</summary>
+    public Queue<int> ApplyResults { get; } = new();
+
     public int Apply(Layout layout, bool saveToDatabase)
     {
         Applied.Add((layout, saveToDatabase));
-        return ApplyResult;
+        return ApplyResults.Count > 0 ? ApplyResults.Dequeue() : ApplyResult;
+    }
+
+    public int RememberedResult { get; set; }
+    public int Remembered { get; private set; }
+
+    public int ApplyRemembered()
+    {
+        Remembered++;
+        return RememberedResult;
     }
 
     public Layout? BuildPrimary(string devicePath)

@@ -202,7 +202,7 @@ sealed class TvSession : IDisposable
         if (!_menuShown) return;
         var front = KeySender.ForegroundWindow();
         if (front == IntPtr.Zero || AppWindows.ProcessOf(front) == Environment.ProcessId) return; // ours (the keyboard), or mid-switch
-        HideMenu();
+        HideMenu(parkCursor: false);
         if (_running.Values.FirstOrDefault(r => !r.Gone && r.OwnsForegroundWindow()) is { } app)
         {
             _current = app;
@@ -226,12 +226,15 @@ sealed class TvSession : IDisposable
         _log.Write($"Back to {_originTitle}.");
     }
 
-    void HideMenu()
+    // parkCursor: false when the mouse itself took another window to the front.
+    void HideMenu(bool parkCursor = true)
     {
+        bool wasShown = _menuShown;
         _menuShown = false;
         _picking = false;
         _mediaTimer.Stop();
         _view?.Hide();
+        if (wasShown && parkCursor) AppWindows.ParkCursor();
     }
 
     // "Now playing" in the menu, read again every moment while it shows.
@@ -740,8 +743,6 @@ sealed class TvSession : IDisposable
     {
         var actions = _mapper.Update(buttons, DateTime.UtcNow);
         if (actions.Count == 0) return;
-        // The controller is in use over the menu or its apps: the mouse goes out of the way.
-        if (_menuShown || _keyboardShown || _current is { Gone: false }) AppWindows.ParkCursor();
         if (_menuShown)
         {
             if (_view is { } view) foreach (var action in actions) view.Handle(action);

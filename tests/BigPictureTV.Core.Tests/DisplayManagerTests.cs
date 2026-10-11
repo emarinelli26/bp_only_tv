@@ -56,10 +56,36 @@ public sealed class DisplayManagerTests : IDisposable
     }
 
     [Fact]
-    public void RestoreFallsBackToExtendWhenTheSavedLayoutIsRejected()
+    public void ARejectedLayoutWithOneDisplayTurnsOnJustThatDisplay()
+    {
+        _display.Displays[1] = Displays.LgTv with { Active = false }; // the monitor alone was on
+        _manager.SwitchToTv();
+        _display.ApplyResults.Enqueue(87); // ERROR_INVALID_PARAMETER, e.g. adapter ids changed
+        _manager.RestoreDesktop();
+        Assert.Single(_display.Applied[^1].Layout.Paths);
+        Assert.True(_display.Applied[^1].Save);
+        Assert.Equal(0, _display.Remembered);
+        Assert.Equal(0, _display.Extends); // never Extend when the monitor alone was on
+        Assert.False(_store.HasSaved);
+    }
+
+    [Fact]
+    public void ThenTheLayoutWindowsRemembersIsTried()
     {
         _manager.SwitchToTv();
-        _display.ApplyResult = 87; // ERROR_INVALID_PARAMETER, e.g. adapter ids changed
+        _display.ApplyResult = 87;
+        _manager.RestoreDesktop();
+        Assert.Equal(1, _display.Remembered);
+        Assert.Equal(0, _display.Extends);
+        Assert.False(_store.HasSaved);
+    }
+
+    [Fact]
+    public void RestoreFallsBackToExtendWhenNothingElseWorks()
+    {
+        _manager.SwitchToTv();
+        _display.ApplyResult = 87;
+        _display.RememberedResult = 31;
         _manager.RestoreDesktop();
         Assert.Equal(1, _display.Extends);
         Assert.False(_store.HasSaved);
@@ -70,6 +96,7 @@ public sealed class DisplayManagerTests : IDisposable
     {
         _manager.SwitchToTv();
         _display.ApplyResult = 87;
+        _display.RememberedResult = 31;
         _display.ExtendResult = 31;
         _manager.RestoreDesktop();
         Assert.True(_store.HasSaved);

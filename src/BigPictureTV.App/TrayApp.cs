@@ -456,7 +456,11 @@ public sealed class TrayApp : IDisposable
             _tvMenu?.CloseAll();
             RestoreAudio();
         }
-        else MoveAudioToTv();
+        else
+        {
+            MoveAudioToTv();
+            AppWindows.ParkCursor(); // the pointer out of the way on the TV, once
+        }
         UpdateIcon();
         Notify(mode == DisplayMode.Desktop ? S.NowOnDesktop : S.NowOnTv, ToolTipIcon.None);
     }
