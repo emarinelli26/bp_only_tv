@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release, for example v1.0.0'
+        description: 'Version to release, for example v1.0.0, or v2.0.0-beta.1 for a test version'
         required: true
 
 permissions:
@@ -31,9 +31,12 @@ jobs:
         run: |
           TAG="${INPUT_VERSION:-$GITHUB_REF_NAME}"
           [[ "$TAG" == v* ]] || TAG="v$TAG"
-          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Bad version: $TAG"; exit 1; }
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "Bad version: $TAG"; exit 1; }
           echo "TAG=$TAG" >> "$GITHUB_ENV"
           echo "VERSION=${TAG#v}" >> "$GITHUB_ENV"
+          # A version with a suffix (v2.0.0-beta.1) is a test version: marked as a
+          # pre-release, so GitHub never offers it as the latest one.
+          [[ "$TAG" == *-* ]] && echo "PRERELEASE=--prerelease" >> "$GITHUB_ENV" || true
       - run: dotnet test -c Release
       - run: dotnet publish src/BigPictureTV.App -c Release -r win-x64 -o publish -p:Version=${{ env.VERSION }}
       - run: dotnet publish src/BigPictureTV.Cli -c Release -r win-x64 -o publish -p:Version=${{ env.VERSION }}
@@ -46,4 +49,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: >
           gh release create "$TAG" publish/BigPictureTV.exe publish/bptv.exe publish/SHA256SUMS.txt
-          --target "$GITHUB_SHA" --draft --title "BigPictureTV $TAG" --generate-notes
+          --target "$GITHUB_SHA" --draft $PRERELEASE --title "BigPictureTV $TAG" --generate-notes
