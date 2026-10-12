@@ -147,6 +147,20 @@ public class TvMenuTests
     }
 
     [Fact]
+    public void TvProfilesNeverSignInToTheBrowser()
+    {
+        Assert.Contains("--disable-sync", BrowserCommand.Arguments(new TvApp { Name = "x", Target = "https://example.com" }, "p"));
+
+        Assert.Equal("""{"signin":{"allowed":false}}""", BrowserCommand.WithoutSignIn(null));
+        string? changed = BrowserCommand.WithoutSignIn("""{"profile":{"name":"TV"},"signin":{"allowed":true,"other":1}}""");
+        Assert.Contains("\"allowed\":false", changed);
+        Assert.Contains("\"name\":\"TV\"", changed); // the rest is kept
+        Assert.Contains("\"other\":1", changed);
+        Assert.Null(BrowserCommand.WithoutSignIn("""{"signin":{"allowed":false}}""")); // already off
+        Assert.Null(BrowserCommand.WithoutSignIn("not json"));
+    }
+
+    [Fact]
     public void TheExtensionManifestMeetsTheStoreLimits()
     {
         using var manifest = System.Text.Json.JsonDocument.Parse(SpatialNav.Read("manifest.json"));

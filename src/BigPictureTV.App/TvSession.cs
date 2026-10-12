@@ -457,7 +457,11 @@ sealed class TvSession : IDisposable
             // One window per tile: a copy left from before would take the new
             // page as a second window and ignore its settings. On the shared
             // profile the other tiles' windows stay: they use the same settings.
-            if (!_running.Values.Any(r => !r.Gone && r.Profile == profile)) BrowserProcesses.Close(name, profile, _log);
+            if (!_running.Values.Any(r => !r.Gone && r.Profile == profile))
+            {
+                BrowserProcesses.Close(name, profile, _log);
+                TurnOffSignIn(profile, app);
+            }
             File.Delete(Path.Combine(profile, "DevToolsActivePort")); // so we read the new one
             // Only TV pages get the DevTools channel: Cloudflare's check (on
             // Crunchyroll) never passes while the browser has it open. The
@@ -486,6 +490,25 @@ sealed class TvSession : IDisposable
         var running = new RunningApp(app, _log) { Profile = profile, BrowserName = name, Key = key ?? app.Key, SharedProfile = shared };
         _ = Task.Run(() => ConnectAsync(running, before));
         return running;
+    }
+
+    // Before the browser starts on the profile: no signing in to it with the
+    // Windows account (and so none of that account's extensions).
+    void TurnOffSignIn(string profile, TvApp app)
+    {
+        string file = Path.Combine(profile, "Default", "Preferences");
+        try
+        {
+            string? changed = BrowserCommand.WithoutSignIn(File.Exists(file) ? File.ReadAllText(file) : null);
+            if (changed == null) return;
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            File.WriteAllText(file, changed);
+            _log.Write($"{app}: signing in to the browser turned off in its profile.");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _log.Write($"{app}: couldn't turn off signing in to the browser: {e.Message}");
+        }
     }
 
     // Plain pages used to have a profile per tile; the first time the shared
