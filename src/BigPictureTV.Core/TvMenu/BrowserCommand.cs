@@ -36,6 +36,32 @@ public static class BrowserCommand
         return Path.Combine(dataDir, "Browser", folder);
     }
 
+    /// <summary>
+    /// A profile's Preferences file with signing in to the browser turned
+    /// off: Edge signs new profiles in with the Windows account on its own,
+    /// and then brings in that account's extensions and settings, which have
+    /// no place in a TV window. Logins to the sites themselves are kept.
+    /// Null if nothing needs to change.
+    /// </summary>
+    public static string? WithoutSignIn(string? preferencesJson)
+    {
+        System.Text.Json.Nodes.JsonObject root;
+        try
+        {
+            root = (string.IsNullOrWhiteSpace(preferencesJson) ? null : System.Text.Json.Nodes.JsonNode.Parse(preferencesJson) as System.Text.Json.Nodes.JsonObject)
+                ?? new System.Text.Json.Nodes.JsonObject();
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null; // not ours to rewrite
+        }
+        if (root["signin"] is not System.Text.Json.Nodes.JsonObject signin)
+            root["signin"] = signin = new System.Text.Json.Nodes.JsonObject();
+        if (signin["allowed"] is System.Text.Json.Nodes.JsonValue v && v.TryGetValue(out bool allowed) && !allowed) return null;
+        signin["allowed"] = false;
+        return root.ToJsonString();
+    }
+
     /// <param name="extensionDir">The navigation extension (see <see cref="SpatialNav"/>), for pages without a TV interface.</param>
     public static string Arguments(TvApp app, string profileDir, string? extensionDir = null)
     {
@@ -46,6 +72,7 @@ public static class BrowserCommand
             "--no-default-browser-check",
             "--hide-crash-restore-bubble",
             "--start-fullscreen",
+            "--disable-sync", // the TV profiles never take the user's extensions and settings
         };
         if (app.UserAgent.Trim().Length > 0)
         {
