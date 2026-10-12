@@ -151,6 +151,16 @@ public sealed class DisplayManager : IDisplaySwitcher
         return tvPath != null && displays.Any(d => string.Equals(d.DevicePath, tvPath, StringComparison.OrdinalIgnoreCase));
     }
 
+    // True if exactly the displays that were on are on now (or that isn't known).
+    bool ShowsOnly(IReadOnlyList<string> active)
+    {
+        if (active.Count == 0) return true;
+        var now = _display.ListDisplays().Where(d => d.Active).Select(d => d.DevicePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return now.SetEquals(active);
+    }
+
+    static string Describe(IEnumerable<DisplayInfo> displays) => string.Join(", ", displays.Select(d => d.Name));
+
     /// <summary>Whether the displays already show the given TV layout.</summary>
     public static bool IsIn(TvLayout layout, IReadOnlyList<DisplayInfo> displays, string tvPath)
     {
@@ -176,16 +186,19 @@ public sealed class DisplayManager : IDisplaySwitcher
     {
         if (_store.HasSaved)
         {
+            var active = _store.ActiveDisplays();
             try
             {
                 int err = _display.Apply(_store.Load(), saveToDatabase: true);
-                if (err == 0)
+                if (err == 0 && ShowsOnly(active))
                 {
                     ForgetSavedLayout();
                     _log.Write("Restored saved layout.");
                     return;
                 }
-                _log.Write($"Saved layout could not be applied (error {err}).");
+                _log.Write(err == 0
+                    ? $"The saved layout was applied, but the displays on are not the ones that were ({Describe(_display.ListDisplays().Where(d => d.Active))} instead of {active.Count})."
+                    : $"Saved layout could not be applied (error {err}).");
             }
             catch (Exception e) when (e is FormatException or IOException or System.Text.Json.JsonException)
             {
@@ -194,7 +207,6 @@ public sealed class DisplayManager : IDisplaySwitcher
 
             // Only one display was on (a monitor alone): turn on just that one,
             // the same way the TV is turned on alone.
-            var active = _store.ActiveDisplays();
             if (active.Count == 1 && _display.BuildSingleDisplay(active[0]) is { } single)
             {
                 int err = _display.Apply(single, saveToDatabase: true);

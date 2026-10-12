@@ -70,6 +70,19 @@ public sealed class DisplayManagerTests : IDisposable
     }
 
     [Fact]
+    public void ALayoutThatComesBackWithMoreDisplaysOnIsCorrected()
+    {
+        _display.Displays[1] = Displays.LgTv with { Active = false }; // the monitor alone was on
+        _manager.SwitchToTv();
+        _display.Displays[1] = Displays.LgTv; // Windows accepted the layout but left the TV on too (extended)
+        _manager.RestoreDesktop();
+        Assert.Equal(3, _display.Applied.Count); // the TV, the saved layout, then the monitor alone
+        Assert.Single(_display.Applied[^1].Layout.Paths);
+        Assert.Equal(0, _display.Extends);
+        Assert.False(_store.HasSaved);
+    }
+
+    [Fact]
     public void ThenTheLayoutWindowsRemembersIsTried()
     {
         _manager.SwitchToTv();
