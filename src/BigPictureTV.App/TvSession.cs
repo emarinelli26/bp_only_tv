@@ -480,7 +480,8 @@ sealed class TvSession : IDisposable
                 UseShellExecute = false,
             };
             Process.Start(start)?.Dispose(); // it often hands over and quits; the real one is found below
-            if (edge && !fromStore && app.UserAgent.Trim().Length == 0) EdgeStore.AskToTurnOn(browser, profile, app.ToString(), _log);
+            if (edge && !fromStore && app.UserAgent.Trim().Length == 0 && EdgeStore.AskToTurnOn(browser, profile, app.ToString(), _log))
+                EdgeStore.WhenOn(profile, () => Post(() => ReloadWithNavigation(profile)));
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException or UnauthorizedAccessException)
         {
@@ -490,6 +491,19 @@ sealed class TvSession : IDisposable
         var running = new RunningApp(app, _log) { Profile = profile, BrowserName = name, Key = key ?? app.Key, SharedProfile = shared };
         _ = Task.Run(() => ConnectAsync(running, before));
         return running;
+    }
+
+    // The navigation extension was just turned on in this profile: the
+    // tile's page is loaded again so it gets it, without reopening the tile.
+    void ReloadWithNavigation(string profile)
+    {
+        _log.Write("The navigation extension is on now; loading the page again.");
+        if (_running.Values.FirstOrDefault(r => !r.Gone && r.Profile == profile) is not { } app || _menuShown) return;
+        app.BringToFront();
+        _ = Task.Delay(600).ContinueWith(_ => Post(() =>
+        {
+            if (app.OwnsForegroundWindow()) KeySender.Send(0x74); // F5
+        }));
     }
 
     // Before the browser starts on the profile: no signing in to it with the
