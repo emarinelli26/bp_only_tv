@@ -83,6 +83,19 @@ public sealed class DisplayManagerTests : IDisposable
     }
 
     [Fact]
+    public void WithTheDisplayAlreadyOnAloneChosenAsTheTvGoingBackChangesNothing()
+    {
+        _display.Displays[1] = Displays.LgTv with { Active = false };
+        var manager = new DisplayManager(_display, _store, ds => (ds[0], "chosen in settings"), _log); // the monitor is "the TV"
+        Assert.True(manager.SwitchToTv());
+        Assert.Empty(_display.Applied); // already there
+        manager.RestoreDesktop();
+        Assert.Equal(0, _display.Extends); // not extended: the same layout comes back
+        Assert.Single(_display.Applied);
+        Assert.False(_store.HasSaved);
+    }
+
+    [Fact]
     public void ThenTheLayoutWindowsRemembersIsTried()
     {
         _manager.SwitchToTv();
@@ -189,7 +202,7 @@ public sealed class DisplayManagerTests : IDisposable
         _display.Displays[1] = Displays.LgTv with { Primary = true };
         Assert.True(ManagerWith(TvLayout.TvPrimary).SwitchToTv());
         Assert.Empty(_display.Applied);
-        Assert.False(_store.HasSaved);
+        Assert.True(_store.HasSaved); // what shows is the desktop to come back to
     }
 
     [Fact]

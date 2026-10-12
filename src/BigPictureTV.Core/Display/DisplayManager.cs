@@ -65,6 +65,10 @@ public sealed class DisplayManager : IDisplaySwitcher
         var layout = _layout();
         if (IsIn(layout, displays, tv.DevicePath))
         {
+            // Nothing to change (the chosen TV is the display already on
+            // alone), but what shows now is still the desktop to come back
+            // to: without it, going back would fall back to Extend.
+            SaveDesktop(displays);
             _log.Write($"Already on the TV ({layout}).");
             Remember(tv, layout);
             return true;
@@ -81,14 +85,7 @@ public sealed class DisplayManager : IDisplaySwitcher
             }
         }
 
-        // Only save if nothing is saved yet, so a second switch never
-        // overwrites the real desktop layout with a TV one.
-        if (!_store.HasSaved)
-        {
-            var current = _display.QueryActive();
-            _store.Save(current, displays.Where(x => x.Active).Select(x => x.DevicePath));
-            _log.Write($"Saved current layout ({current.Paths.Length} active display(s)).");
-        }
+        SaveDesktop(displays);
 
         int err = layout switch
         {
@@ -104,6 +101,16 @@ public sealed class DisplayManager : IDisplaySwitcher
         _log.Write($"Switched to the TV ({layout}): {tv} ({reason}).");
         Remember(tv, layout);
         return true;
+    }
+
+    // Only saves if nothing is saved yet, so a second switch never
+    // overwrites the real desktop layout with a TV one.
+    void SaveDesktop(IReadOnlyList<DisplayInfo> displays)
+    {
+        if (_store.HasSaved) return;
+        var current = _display.QueryActive();
+        _store.Save(current, displays.Where(x => x.Active).Select(x => x.DevicePath));
+        _log.Write($"Saved current layout ({current.Paths.Length} active display(s)).");
     }
 
     int ApplyPrimary(DisplayInfo tv)
