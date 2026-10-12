@@ -37,19 +37,19 @@ public sealed class ModeController
     // Consecutive checks that found the displays no longer TV-only.
     int _mismatches;
 
-    // When we last switched, and how many times since then Windows turned
-    // the other displays back on and we switched again.
-    DateTime _switchedAt = DateTime.MinValue;
-    int _reapplies;
-    const int MaxReapplies = 2;
+    // When Windows changed the layout and we put the TV layout back.
+    readonly Queue<DateTime> _reapplies = new();
 
     /// <summary>
-    /// Right after a switch, other displays coming back while the TV stays on
-    /// is Windows reacting to a display that woke up or went to sleep (a TV
-    /// or monitor losing its signal can do that), not the user: within this
-    /// time the TV layout is put back instead of giving up on it.
+    /// While on the TV, Windows can change the layout on its own while the TV
+    /// is still plugged in: a display waking up or going to sleep, a game
+    /// changing the resolution, a window taking the screen. The TV layout is
+    /// put back, at most this many times within <see cref="ReapplyWindow"/>;
+    /// more than that is followed (someone really wants the other displays).
     /// </summary>
-    public TimeSpan ReapplyWindow { get; set; } = TimeSpan.FromSeconds(20);
+    public int MaxReapplies { get; set; } = 3;
+
+    public TimeSpan ReapplyWindow { get; set; } = TimeSpan.FromSeconds(60);
 
     /// <summary>The time now; tests replace it.</summary>
     public Func<DateTime> Clock { get; set; } = () => DateTime.UtcNow;
@@ -92,11 +92,18 @@ public sealed class ModeController
             {
                 SetMode(DisplayMode.TvAuto);
             }
-            else
+            else if (_switcher.IsOnTv())
             {
                 // The last run ended while on the TV (crash, sign-out): put things back.
-                _log.Write("Found a leftover saved layout from a previous run.");
+                _log.Write("Found a leftover saved layout from a previous run, still on the TV; restoring the desktop.");
                 _switcher.RestoreDesktop();
+            }
+            else
+            {
+                // The desktop is already back (Windows restored it, or a reboot):
+                // applying an old layout would only change what the user sees now.
+                _log.Write("Found a leftover saved layout from a previous run; the desktop is already back, so it is dropped.");
+                _switcher.ForgetSavedLayout();
             }
         }
     }
@@ -159,7 +166,7 @@ public sealed class ModeController
         lock (_gate)
         {
             // Already back on the desktop (changed outside the app): that is what the user wanted.
-            if (Mode != DisplayMode.Desktop && LayoutLeftTv(bigPictureOpen, required: 1)) return;
+            if (Mode != DisplayMode.Desktop && LayoutLeftTv(bigPictureOpen, required: 1, reapply: false)) return;
             if (Mode == DisplayMode.Desktop)
             {
                 if (SwitchToTv()) SetMode(DisplayMode.TvManual);
@@ -230,11 +237,14 @@ public sealed class ModeController
         }
     }
 
-    // While on the TV, Windows can bring the other displays back on its own:
-    // the TV went to standby or switched input, the driver reset, someone
-    // pressed Win+P. Follow what the displays really show instead of fighting
-    // it, and wait for Big Picture to reopen (or a toggle) to switch again.
-    bool LayoutLeftTv(bool bigPictureOpen, int required)
+    // While on the TV, Windows can change the layout on its own. With the TV
+    // still plugged in, that is Windows (a display waking up, a game changing
+    // the resolution), so the TV layout is put back. With the TV gone
+    // (standby, unplugged), or Windows insisting again and again, follow what
+    // the displays really show and wait for Big Picture to reopen (or a
+    // toggle) to switch again. reapply is false when the user asked for the
+    // desktop: the desktop being back already is what they wanted.
+    bool LayoutLeftTv(bool bigPictureOpen, int required, bool reapply = true)
     {
         if (_switcher.IsOnTv())
         {
@@ -243,11 +253,13 @@ public sealed class ModeController
         }
         if (++_mismatches < required) return false;
 
-        if (_reapplies < MaxReapplies && Clock() - _switchedAt < ReapplyWindow && _switcher.TvIsActive())
+        var now = Clock();
+        while (_reapplies.Count > 0 && now - _reapplies.Peek() >= ReapplyWindow) _reapplies.Dequeue();
+        if (reapply && _reapplies.Count < MaxReapplies && _switcher.TvIsConnected())
         {
-            _reapplies++;
+            _reapplies.Enqueue(now);
             _mismatches = 0;
-            _log.Write("Windows turned the other displays back on right after the switch, with the TV still on (a display woke up or went to sleep); switching to the TV again.");
+            _log.Write("Windows changed the displays while on the TV, with the TV still connected (a display woke up or went to sleep, or a game changed the screen); switching to the TV again.");
             if (_switcher.SwitchToTv()) return false;
         }
 
@@ -264,8 +276,7 @@ public sealed class ModeController
     bool SwitchToTv()
     {
         if (!_switcher.SwitchToTv()) return false;
-        _switchedAt = Clock();
-        _reapplies = 0;
+        _reapplies.Clear();
         return true;
     }
 

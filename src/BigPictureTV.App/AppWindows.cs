@@ -34,6 +34,26 @@ static class AppWindows
         return found;
     }
 
+    /// <summary>
+    /// The windows someone could go back to, front to back, like Alt+Tab
+    /// shows them: visible, with a title, not owned by another window, not a
+    /// tool window, not hidden by Windows (background store apps), nor of
+    /// the process <paramref name="except"/>.
+    /// </summary>
+    public static List<IntPtr> Switchable(int except)
+    {
+        var found = new List<IntPtr>();
+        EnumWindows((window, _) =>
+        {
+            if (!IsWindowVisible(window) || GetWindowTextLength(window) == 0 || GetWindow(window, GW_OWNER) != IntPtr.Zero) return true;
+            if ((GetWindowLongPtr(window, GWL_EXSTYLE).ToInt64() & WS_EX_TOOLWINDOW) != 0 || IsShell(window) || ProcessOf(window) == except) return true;
+            if (DwmGetWindowAttribute(window, DWMWA_CLOAKED, out int cloaked, sizeof(int)) == 0 && cloaked != 0) return true;
+            found.Add(window);
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
+
     public static bool Exists(IntPtr window) => window != IntPtr.Zero && IsWindow(window);
 
     /// <summary>Exists and is on screen (minimized counts).</summary>
@@ -78,14 +98,49 @@ static class AppWindows
                rect.Right >= info.rcMonitor.Right && rect.Bottom >= info.rcMonitor.Bottom;
     }
 
+    /// <summary>
+    /// Moves the mouse pointer to the bottom right corner of the display the
+    /// window in front is on, where its arrow falls off the screen and it
+    /// rests on nothing: driven by the controller, a pointer left over a
+    /// page highlights cards, opens previews and keeps a video's controls up.
+    /// </summary>
+    public static void ParkCursor()
+    {
+        var monitor = MonitorFromWindow(KeySender.ForegroundWindow(), MONITOR_DEFAULTTOPRIMARY);
+        var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+        if (!GetMonitorInfo(monitor, ref info)) return;
+        int x = info.rcMonitor.Right - 1, y = info.rcMonitor.Bottom - 1;
+        if (GetCursorPos(out var at) && at.X == x && at.Y == y) return;
+        SetCursorPos(x, y);
+    }
+
     /// <summary>Asks the window to close, like its X button.</summary>
     public static void Close(IntPtr window)
     {
         if (Exists(window)) PostMessage(window, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
     }
 
-    const uint WM_CLOSE = 0x0010, MONITOR_DEFAULTTONEAREST = 2;
-    const int SW_RESTORE = 9;
+    const uint WM_CLOSE = 0x0010, MONITOR_DEFAULTTOPRIMARY = 1, MONITOR_DEFAULTTONEAREST = 2, GW_OWNER = 4;
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct POINT { public int X, Y; }
+
+    [DllImport("user32.dll")]
+    static extern bool GetCursorPos(out POINT point);
+
+    [DllImport("user32.dll")]
+    static extern bool SetCursorPos(int x, int y);
+    const int SW_RESTORE = 9, GWL_EXSTYLE = -20, DWMWA_CLOAKED = 14;
+    const long WS_EX_TOOLWINDOW = 0x80;
+
+    [DllImport("user32.dll")]
+    static extern IntPtr GetWindow(IntPtr window, uint command);
+
+    [DllImport("user32.dll")]
+    static extern IntPtr GetWindowLongPtr(IntPtr window, int index);
+
+    [DllImport("dwmapi.dll")]
+    static extern int DwmGetWindowAttribute(IntPtr window, int attribute, out int value, int size);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     static extern int GetWindowText(IntPtr window, StringBuilder text, int max);

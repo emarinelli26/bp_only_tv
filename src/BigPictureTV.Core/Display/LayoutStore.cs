@@ -16,13 +16,15 @@ public sealed class LayoutStore
 
     public bool HasSaved => File.Exists(_file);
 
-    public void Save(Layout layout)
+    /// <param name="active">Device paths of the displays that were on, to rebuild the layout if Windows rejects it.</param>
+    public void Save(Layout layout, IEnumerable<string>? active = null)
     {
         var dto = new SavedLayout
         {
             Saved = DateTimeOffset.Now,
             Paths = ToBase64(layout.Paths),
             Modes = ToBase64(layout.Modes),
+            Active = active?.ToArray(),
         };
         Directory.CreateDirectory(Path.GetDirectoryName(_file)!);
         File.WriteAllText(_file, JsonSerializer.Serialize(dto, new JsonSerializerOptions { WriteIndented = true }));
@@ -34,6 +36,19 @@ public sealed class LayoutStore
         var dto = JsonSerializer.Deserialize<SavedLayout>(File.ReadAllText(_file))
             ?? throw new FormatException("Saved layout is empty");
         return new Layout { Paths = FromBase64<PATH_INFO>(dto.Paths), Modes = FromBase64<MODE_INFO>(dto.Modes) };
+    }
+
+    /// <summary>Device paths of the displays that were on when it was saved; empty if unknown.</summary>
+    public IReadOnlyList<string> ActiveDisplays()
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<SavedLayout>(File.ReadAllText(_file))?.Active ?? Array.Empty<string>();
+        }
+        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
+        {
+            return Array.Empty<string>();
+        }
     }
 
     public void Delete()
@@ -48,6 +63,7 @@ public sealed class LayoutStore
         public DateTimeOffset Saved { get; set; }
         public string Paths { get; set; } = "";
         public string Modes { get; set; } = "";
+        public string[]? Active { get; set; }
     }
 
     public static string ToBase64<T>(T[] items) where T : struct

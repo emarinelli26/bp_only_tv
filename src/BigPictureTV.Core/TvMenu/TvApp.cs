@@ -78,6 +78,12 @@ public sealed class TvApp
     /// </summary>
     public string ProcessName { get; set; } = "";
 
+    /// <summary>
+    /// Picture for the tile: an image or a program file (its icon), or a web
+    /// address. Empty: the page's own icon (Web) or the program's (Program).
+    /// </summary>
+    public string Icon { get; set; } = "";
+
     /// <summary>Tile color as #RRGGBB. Empty: one from the menu's palette.</summary>
     public string Color { get; set; } = "";
 

@@ -179,11 +179,22 @@ public class ModeControllerTests
     }
 
     [Fact]
-    public void StartRestoresALeftoverLayout()
+    public void StartRestoresALeftoverLayoutWhileStillOnTheTv()
     {
         _sw.HasSavedLayout = true;
+        _sw.TvOnly = true;
         _c.Start(bigPictureOpen: false);
         Assert.Equal(1, _sw.Restores);
+        Assert.Equal(DisplayMode.Desktop, _c.Mode);
+    }
+
+    [Fact]
+    public void StartDropsALeftoverLayoutWhenTheDesktopIsAlreadyBack()
+    {
+        _sw.HasSavedLayout = true; // e.g. a reboot: Windows came back with the monitor only
+        _c.Start(bigPictureOpen: false);
+        Assert.Equal(0, _sw.Restores); // the displays are left as they are
+        Assert.False(_sw.HasSavedLayout);
         Assert.Equal(DisplayMode.Desktop, _c.Mode);
     }
 
@@ -260,29 +271,68 @@ public class ModeControllerTests
         var now = T0;
         _c.Clock = () => now;
         _c.Toggle(bigPictureOpen: false);
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < 4; i++)
         {
             _sw.TvOnly = false;
             _sw.TvStillOn = true;
-            now = now.AddSeconds(2);
+            now = now.AddSeconds(5);
             _c.Tick(false, now);
             _c.Tick(false, now);
         }
         Assert.Equal(DisplayMode.Desktop, _c.Mode);
-        Assert.Equal(3, _sw.Switches); // the first one and two more tries
+        Assert.Equal(4, _sw.Switches); // the first one and three more tries
     }
 
     [Fact]
-    public void LongAfterTheSwitchOtherDisplaysComingBackAreTheUsers()
+    public void LongAfterTheSwitchTheTvLayoutIsStillPutBack()
     {
         var now = T0;
         _c.Clock = () => now;
         _c.Toggle(bigPictureOpen: false);
         _sw.TvOnly = false;
-        _sw.TvStillOn = true; // e.g. Win+P, Extend
+        _sw.TvStillOn = true; // a game changing the screen when clicked, minutes in
         now = T0.AddMinutes(5);
         _c.Tick(false, now);
         _c.Tick(false, now);
+        Assert.Equal(DisplayMode.TvManual, _c.Mode);
+        Assert.Equal(2, _sw.Switches);
+    }
+
+    [Fact]
+    public void TheTvTurnedOffForTheMonitorIsPutBackWhileStillConnected()
+    {
+        _c.Tick(true, T0);
+        _sw.TvOnly = false;
+        _sw.TvConnected = true; // Windows went to the monitor only, the TV still plugged in
+        _c.SyncWithDisplays(bigPictureOpen: true); // opening the menu
+        Assert.Equal(DisplayMode.TvAuto, _c.Mode);
+        Assert.True(_sw.TvOnly);
+    }
+
+    [Fact]
+    public void ChangesSpreadOverTimeKeepBeingPutBack()
+    {
+        var now = T0;
+        _c.Clock = () => now;
+        _c.Toggle(bigPictureOpen: false);
+        for (int i = 0; i < 6; i++)
+        {
+            _sw.TvOnly = false;
+            _sw.TvStillOn = true;
+            now = now.AddSeconds(30);
+            _c.Tick(false, now);
+            _c.Tick(false, now);
+        }
+        Assert.Equal(DisplayMode.TvManual, _c.Mode);
+    }
+
+    [Fact]
+    public void ToggleWithTheDesktopAlreadyBackDoesNotPutTheTvBack()
+    {
+        _c.Toggle(bigPictureOpen: false);
+        _sw.TvOnly = false;
+        _sw.TvStillOn = true;
+        _c.Toggle(bigPictureOpen: false);
         Assert.Equal(DisplayMode.Desktop, _c.Mode);
         Assert.Equal(1, _sw.Switches);
     }

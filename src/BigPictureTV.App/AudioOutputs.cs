@@ -147,6 +147,43 @@ static class AudioOutputs
         });
     }
 
+    /// <summary>
+    /// The volume controls of the apps <paramref name="isTarget"/> picks, held
+    /// so their level can be set after the app closed: Windows still keeps
+    /// what is set on a finished session for the app's next run.
+    /// </summary>
+    public static HeldVolumes HoldAppVolumes(Func<int, bool> isTarget)
+    {
+        var setters = new List<Func<float, int>>();
+        ForAppSessions(isTarget, allOutputs: true, targets =>
+        {
+            foreach (var volume in targets)
+                setters.Add(level => { var context = Guid.Empty; return volume.SetMasterVolume(level, ref context); });
+        });
+        return new HeldVolumes(setters);
+    }
+
+    public sealed class HeldVolumes
+    {
+        readonly List<Func<float, int>> _setters;
+
+        internal HeldVolumes(List<Func<float, int>> setters) => _setters = setters;
+
+        public int Count => _setters.Count;
+
+        /// <summary>How many took the level.</summary>
+        public int Set(int percent)
+        {
+            int done = 0;
+            foreach (var set in _setters)
+            {
+                try { if (set(Math.Clamp(percent / 100f, 0, 1)) >= 0) done++; }
+                catch (Exception e) when (e is COMException or InvalidComObjectException) { }
+            }
+            return done;
+        }
+    }
+
     // Runs `act` once per output, with the target apps' sessions on it.
     static void ForAppSessions(Func<int, bool> isTarget, bool allOutputs, Action<List<ISimpleAudioVolume>> act)
     {

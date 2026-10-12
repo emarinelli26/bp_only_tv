@@ -18,6 +18,9 @@ public interface IDisplaySwitcher
     /// <summary>True if the TV we switched to is still on, whatever else came on with it.</summary>
     bool TvIsActive();
 
+    /// <summary>True if the TV is still plugged in and available, on or not (it didn't go to standby or get unplugged).</summary>
+    bool TvIsConnected();
+
     /// <summary>Drops the saved layout without applying it (the desktop is already back).</summary>
     void ForgetSavedLayout();
 }
@@ -62,6 +65,10 @@ public sealed class DisplayManager : IDisplaySwitcher
         var layout = _layout();
         if (IsIn(layout, displays, tv.DevicePath))
         {
+            // Nothing to change (the chosen TV is the display already on
+            // alone), but what shows now is still the desktop to come back
+            // to: without it, going back would fall back to Extend.
+            SaveDesktop(displays);
             _log.Write($"Already on the TV ({layout}).");
             Remember(tv, layout);
             return true;
@@ -78,14 +85,7 @@ public sealed class DisplayManager : IDisplaySwitcher
             }
         }
 
-        // Only save if nothing is saved yet, so a second switch never
-        // overwrites the real desktop layout with a TV one.
-        if (!_store.HasSaved)
-        {
-            var current = _display.QueryActive();
-            _store.Save(current);
-            _log.Write($"Saved current layout ({current.Paths.Length} active display(s)).");
-        }
+        SaveDesktop(displays);
 
         int err = layout switch
         {
@@ -101,6 +101,16 @@ public sealed class DisplayManager : IDisplaySwitcher
         _log.Write($"Switched to the TV ({layout}): {tv} ({reason}).");
         Remember(tv, layout);
         return true;
+    }
+
+    // Only saves if nothing is saved yet, so a second switch never
+    // overwrites the real desktop layout with a TV one.
+    void SaveDesktop(IReadOnlyList<DisplayInfo> displays)
+    {
+        if (_store.HasSaved) return;
+        var current = _display.QueryActive();
+        _store.Save(current, displays.Where(x => x.Active).Select(x => x.DevicePath));
+        _log.Write($"Saved current layout ({current.Paths.Length} active display(s)).");
     }
 
     int ApplyPrimary(DisplayInfo tv)
@@ -141,6 +151,23 @@ public sealed class DisplayManager : IDisplaySwitcher
         return tvPath != null && displays.Any(d => d.Active && string.Equals(d.DevicePath, tvPath, StringComparison.OrdinalIgnoreCase));
     }
 
+    public bool TvIsConnected()
+    {
+        var displays = _display.ListDisplays();
+        string? tvPath = _switchedTo ?? _selectTv(displays).Tv?.DevicePath;
+        return tvPath != null && displays.Any(d => string.Equals(d.DevicePath, tvPath, StringComparison.OrdinalIgnoreCase));
+    }
+
+    // True if exactly the displays that were on are on now (or that isn't known).
+    bool ShowsOnly(IReadOnlyList<string> active)
+    {
+        if (active.Count == 0) return true;
+        var now = _display.ListDisplays().Where(d => d.Active).Select(d => d.DevicePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return now.SetEquals(active);
+    }
+
+    static string Describe(IEnumerable<DisplayInfo> displays) => string.Join(", ", displays.Select(d => d.Name));
+
     /// <summary>Whether the displays already show the given TV layout.</summary>
     public static bool IsIn(TvLayout layout, IReadOnlyList<DisplayInfo> displays, string tvPath)
     {
@@ -166,21 +193,49 @@ public sealed class DisplayManager : IDisplaySwitcher
     {
         if (_store.HasSaved)
         {
+            var active = _store.ActiveDisplays();
             try
             {
                 int err = _display.Apply(_store.Load(), saveToDatabase: true);
-                if (err == 0)
+                if (err == 0 && ShowsOnly(active))
                 {
                     ForgetSavedLayout();
                     _log.Write("Restored saved layout.");
                     return;
                 }
-                _log.Write($"Saved layout could not be applied (error {err}), falling back to Extend.");
+                _log.Write(err == 0
+                    ? $"The saved layout was applied, but the displays on are not the ones that were ({Describe(_display.ListDisplays().Where(d => d.Active))} instead of {active.Count})."
+                    : $"Saved layout could not be applied (error {err}).");
             }
             catch (Exception e) when (e is FormatException or IOException or System.Text.Json.JsonException)
             {
-                _log.Write($"Saved layout unreadable ({e.Message}), falling back to Extend.");
+                _log.Write($"Saved layout unreadable ({e.Message}).");
             }
+
+            // Only one display was on (a monitor alone): turn on just that one,
+            // the same way the TV is turned on alone.
+            if (active.Count == 1 && _display.BuildSingleDisplay(active[0]) is { } single)
+            {
+                int err = _display.Apply(single, saveToDatabase: true);
+                if (err == 0)
+                {
+                    ForgetSavedLayout();
+                    _log.Write("Restored the desktop's only display.");
+                    return;
+                }
+                _log.Write($"Turning on the desktop's only display failed (error {err}).");
+            }
+
+            // The arrangement Windows remembers for these displays: the user's,
+            // since the TV layouts are applied without saving them there.
+            int remembered = _display.ApplyRemembered();
+            if (remembered == 0)
+            {
+                ForgetSavedLayout();
+                _log.Write("Restored the layout Windows remembers for these displays.");
+                return;
+            }
+            _log.Write($"Restoring the layout Windows remembers failed (error {remembered}), falling back to Extend.");
         }
 
         // Adapter ids change after a reboot or driver update, which invalidates

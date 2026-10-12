@@ -8,6 +8,9 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
+using System.Windows.Shapes;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using BigPictureTV.Core.TvMenu;
@@ -22,6 +25,9 @@ interface ITvMenuView
 
     void Hide();
 
+    /// <summary>Puts the logos found so far on the tiles (image bytes by tile key).</summary>
+    void ShowIcons(IReadOnlyDictionary<string, byte[]> icons);
+
     /// <summary>A controller action; safe from any thread.</summary>
     void Handle(PadAction action);
 
@@ -33,6 +39,9 @@ interface ITvMenuView
 
     /// <summary>B or Esc.</summary>
     event Action BackRequested;
+
+    /// <summary>Another window came to the front (a click on the game, a game's own alert).</summary>
+    event Action LostFront;
 
     /// <summary>Shows what is playing on the PC, or hides the strip (null).</summary>
     void ShowNowPlaying(NowPlayingInfo? info);
@@ -61,9 +70,15 @@ sealed class TvMenuWindow : Window, ITvMenuView
     static readonly string[] Palette = { "#2D6CDF", "#7A3FD1", "#1E8E6A", "#C4302B", "#D9822B", "#3A3F47" };
 
     readonly UniformGrid _grid = new() { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-    readonly TextBlock _clock, _message, _hints, _hintMenu;
+    readonly TextBlock _clock, _date, _message, _hintMenu;
+    readonly WrapPanel _hints = new() { HorizontalAlignment = HorizontalAlignment.Center };
+    readonly GradientStop _glow = new(Color.FromArgb(0x70, 0x2D, 0x6C, 0xDF), 0); // tinted by the tile chosen
+    static readonly Color Ink = Color.FromRgb(0x0B, 0x0E, 0x14);
     readonly DispatcherTimer _clockTimer = new() { Interval = TimeSpan.FromSeconds(10) };
     readonly List<Border> _tiles = new();
+    readonly Dictionary<string, Image> _tileImages = new(); // tile key: its logo
+    IReadOnlyDictionary<string, byte[]> _icons = new Dictionary<string, byte[]>();
+    readonly Dictionary<string, ImageSource?> _decoded = new(); // tile key: its logo, drawn once
     readonly StackPanel _bar = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(96, 8, 96, 8) };
     readonly Border _musicCard, _audioCard;
     readonly Image _cover = new() { Width = 96, Height = 96, Stretch = Stretch.UniformToFill };
@@ -80,6 +95,7 @@ sealed class TvMenuWindow : Window, ITvMenuView
     public event Action<TvApp>? Chosen;
     public event Action<TvApp>? CloseRequested;
     public event Action? BackRequested;
+    public event Action? LostFront;
     public event Action<PadAction>? MediaRequested;
     public event Action? AudioRequested;
     public event Action<bool, int>? VolumeRequested;
@@ -91,25 +107,35 @@ sealed class TvMenuWindow : Window, ITvMenuView
         ResizeMode = ResizeMode.NoResize;
         Topmost = true;
         ShowInTaskbar = false;
-        Background = new SolidColorBrush(Color.FromRgb(0x10, 0x13, 0x18));
+        Background = new SolidColorBrush(Ink);
         Foreground = Brushes.White;
         FontFamily = new FontFamily("Segoe UI");
         Cursor = Cursors.None;
 
-        _clock = new TextBlock { FontSize = 40, Opacity = 0.8, HorizontalAlignment = HorizontalAlignment.Right };
-        var header = new DockPanel { Margin = new Thickness(96, 64, 96, 32) };
-        DockPanel.SetDock(_clock, Dock.Right);
-        header.Children.Add(_clock);
-        header.Children.Add(new TextBlock { Text = S.TvMenu, FontSize = 56, FontWeight = FontWeights.SemiBold });
+        // Header: the menu's name with a thin accent, and the time and date, like a console's home.
+        _clock = new TextBlock { FontSize = 48, FontWeight = FontWeights.Light, HorizontalAlignment = HorizontalAlignment.Right };
+        _date = new TextBlock { FontSize = 22, Opacity = 0.6, HorizontalAlignment = HorizontalAlignment.Right };
+        var when = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { _clock, _date } };
+        var header = new DockPanel { Margin = new Thickness(96, 56, 96, 24) };
+        DockPanel.SetDock(when, Dock.Right);
+        header.Children.Add(when);
+        header.Children.Add(new StackPanel
+        {
+            Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                new Border { Width = 6, Height = 52, CornerRadius = new CornerRadius(3), Margin = new Thickness(0, 0, 18, 0), Background = new LinearGradientBrush(Color.FromRgb(0x8A, 0xB4, 0xFF), Color.FromRgb(0xB0, 0x7C, 0xFF), 90) },
+                new TextBlock { Text = S.TvMenu, FontSize = 52, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center },
+            },
+        });
 
         _message = new TextBlock
         {
             FontSize = 28, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xB0, 0x40)),
             HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 16),
         };
-        _hints = new TextBlock { FontSize = 28, Opacity = 0.85, HorizontalAlignment = HorizontalAlignment.Center };
-        _hintMenu = new TextBlock { FontSize = 22, Opacity = 0.55, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 10, 0, 0) };
-        var footer = new StackPanel { Margin = new Thickness(96, 16, 96, 56), Children = { _message, _hints, _hintMenu } };
+        _hintMenu = new TextBlock { FontSize = 20, Opacity = 0.5, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 14, 0, 0) };
+        var footer = new StackPanel { Margin = new Thickness(96, 8, 96, 44), Children = { _message, _hints, _hintMenu } };
 
         // Under the tiles, like a console's control center: what is playing and where the sound goes.
         _songTitle = new TextBlock { FontSize = 28, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
@@ -138,10 +164,31 @@ sealed class TvMenuWindow : Window, ITvMenuView
         root.Children.Add(footer);
         root.Children.Add(_bar);
         root.Children.Add(_grid);
-        Content = root;
+
+        // Behind it all: a soft glow in the chosen tile's color, rising from
+        // the bottom, and a darker edge, so the menu isn't a flat color.
+        var glow = new Rectangle
+        {
+            Fill = new RadialGradientBrush
+            {
+                Center = new Point(0.5, 0.62), GradientOrigin = new Point(0.5, 0.62), RadiusX = 0.75, RadiusY = 0.85,
+                GradientStops = { _glow, new GradientStop(Color.FromArgb(0, 0x0B, 0x0E, 0x14), 1) },
+            },
+        };
+        var vignette = new Rectangle
+        {
+            IsHitTestVisible = false,
+            Fill = new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0), EndPoint = new Point(0, 1),
+                GradientStops = { new GradientStop(Color.FromArgb(0x90, 0, 0, 0), 0), new GradientStop(Color.FromArgb(0, 0, 0, 0), 0.3), new GradientStop(Color.FromArgb(0, 0, 0, 0), 0.75), new GradientStop(Color.FromArgb(0xA0, 0, 0, 0), 1) },
+            },
+        };
+        Content = new Grid { Children = { glow, vignette, root } };
 
         _clockTimer.Tick += (_, _) => UpdateClock();
         PreviewKeyDown += OnKey;
+        Deactivated += (_, _) => { if (IsVisible) LostFront?.Invoke(); };
         // Keyboard input in a WPF window that lives in the tray's WinForms loop.
         System.Windows.Forms.Integration.ElementHost.EnableModelessKeyboardInterop(this);
     }
@@ -156,6 +203,7 @@ sealed class TvMenuWindow : Window, ITvMenuView
         _grid.Columns = _columns;
         _grid.Children.Clear();
         _tiles.Clear();
+        _tileImages.Clear();
         for (int i = 0; i < apps.Count; i++)
         {
             var tile = BuildTile(apps[i], i);
@@ -200,8 +248,8 @@ sealed class TvMenuWindow : Window, ITvMenuView
 
     static Border Card(UIElement content) => new()
     {
-        Background = new SolidColorBrush(Color.FromRgb(0x22, 0x27, 0x30)),
-        CornerRadius = new CornerRadius(16),
+        Background = new SolidColorBrush(Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF)), // frosted, over the glow
+        CornerRadius = new CornerRadius(20),
         Padding = new Thickness(16),
         Margin = new Thickness(16, 0, 16, 0),
         BorderBrush = Brushes.White,
@@ -291,36 +339,101 @@ sealed class TvMenuWindow : Window, ITvMenuView
         return -1;
     }
 
+    public void ShowIcons(IReadOnlyDictionary<string, byte[]> icons)
+    {
+        foreach (var key in icons.Keys.Where(k => !_icons.TryGetValue(k, out var old) || !ReferenceEquals(old, icons[k])).ToList())
+            _decoded.Remove(key);
+        _icons = icons;
+        foreach (var (key, image) in _tileImages) SetLogo(image, key);
+    }
+
+    void SetLogo(Image image, string key)
+    {
+        if (!_decoded.TryGetValue(key, out var source))
+            _decoded[key] = source = _icons.TryGetValue(key, out var bytes) ? Logo(bytes) : null;
+        image.Source = source;
+        image.Visibility = source == null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    // The largest picture in the file: an .ico holds several sizes, the first often 16 px.
+    static ImageSource? Logo(byte[] bytes)
+    {
+        try
+        {
+            var decoder = BitmapDecoder.Create(new System.IO.MemoryStream(bytes), BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+            var frame = decoder.Frames.OrderByDescending(f => f.PixelWidth).FirstOrDefault();
+            frame?.Freeze();
+            return frame;
+        }
+        catch (Exception e) when (e is NotSupportedException or System.IO.IOException or ArgumentException or InvalidOperationException or System.IO.FileFormatException)
+        {
+            return null;
+        }
+    }
+
     Border BuildTile(TvApp app, int index)
     {
         string name = app.Kind == TvAppKind.Desktop && app.Name.Length == 0 ? S.TvMenuDesktop : app.ToString();
-        var label = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16) };
+        var label = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16, 12, 16, 12) };
+        if (app.Kind == TvAppKind.Desktop && app.Icon.Trim().Length == 0)
+        {
+            label.Children.Add(new TextBlock
+            {
+                Text = "\uE7F4", FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 64,
+                HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 6),
+            });
+        }
+        else
+        {
+            var logo = new Image { Width = 76, Height = 76, Stretch = Stretch.Uniform, Margin = new Thickness(0, 0, 0, 6), HorizontalAlignment = HorizontalAlignment.Center };
+            RenderOptions.SetBitmapScalingMode(logo, BitmapScalingMode.HighQuality);
+            _tileImages[app.Key] = logo;
+            SetLogo(logo, app.Key);
+            label.Children.Add(logo);
+        }
         label.Children.Add(new TextBlock
         {
-            Text = name, FontSize = 40, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap,
-            TextAlignment = TextAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center,
+            Text = name, FontSize = 34, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis,
+            TextAlignment = TextAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, MaxWidth = 300,
         });
         if (_open.Contains(app.Key))
         {
             label.Children.Add(new Border
             {
                 Background = new SolidColorBrush(Color.FromArgb(0x60, 0, 0, 0)), CornerRadius = new CornerRadius(12),
-                Padding = new Thickness(14, 2, 14, 4), Margin = new Thickness(0, 10, 0, 0), HorizontalAlignment = HorizontalAlignment.Center,
-                Child = new TextBlock { Text = "● " + S.TvMenuRunning, FontSize = 22 },
+                Padding = new Thickness(12, 1, 12, 3), Margin = new Thickness(0, 6, 0, 0), HorizontalAlignment = HorizontalAlignment.Center,
+                Child = new TextBlock { Text = "● " + S.TvMenuRunning, FontSize = 20 },
             });
         }
+        var color = TileColor(app, index);
         var tile = new Border
         {
             Width = 340,
             Height = 200,
-            Margin = new Thickness(20),
-            CornerRadius = new CornerRadius(16),
-            Background = new SolidColorBrush(TileColor(app, index)),
-            BorderBrush = Brushes.White,
-            BorderThickness = new Thickness(0),
+            Margin = new Thickness(22),
+            CornerRadius = new CornerRadius(22),
+            // Lit from the top left, like a glossy card.
+            Background = new LinearGradientBrush(Shade(color, 1.25), Shade(color, 0.6), new Point(0, 0), new Point(1, 1)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF)),
+            BorderThickness = new Thickness(1.5),
             RenderTransformOrigin = new Point(0.5, 0.5),
-            Opacity = app.IsUsable ? 1 : 0.4,
-            Child = label,
+            RenderTransform = new ScaleTransform(1, 1),
+            Opacity = app.IsUsable ? 0.82 : 0.35,
+            Effect = new DropShadowEffect { Color = Colors.Black, BlurRadius = 28, ShadowDepth = 8, Direction = 270, Opacity = 0.55 },
+            Tag = color,
+            Child = new Grid
+            {
+                Children =
+                {
+                    // A sheen over the top half.
+                    new Border
+                    {
+                        CornerRadius = new CornerRadius(21, 21, 0, 0), VerticalAlignment = VerticalAlignment.Top, Height = 90, IsHitTestVisible = false,
+                        Background = new LinearGradientBrush(Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF), Color.FromArgb(0, 0xFF, 0xFF, 0xFF), 90),
+                    },
+                    label,
+                },
+            },
         };
         tile.MouseLeftButtonUp += (_, _) => { _inBar = false; Select(index); Accept(); };
         return tile;
@@ -336,7 +449,68 @@ sealed class TvMenuWindow : Window, ITvMenuView
         return (Color)ColorConverter.ConvertFromString(Palette[index % Palette.Length]);
     }
 
-    void UpdateClock() => _clock.Text = DateTime.Now.ToString("t");
+    static Color Shade(Color c, double f) => Color.FromRgb(
+        (byte)Math.Clamp(c.R * f + (f > 1 ? 255 * (f - 1) * 0.35 : 0), 0, 255),
+        (byte)Math.Clamp(c.G * f + (f > 1 ? 255 * (f - 1) * 0.35 : 0), 0, 255),
+        (byte)Math.Clamp(c.B * f + (f > 1 ? 255 * (f - 1) * 0.35 : 0), 0, 255));
+
+    static readonly Duration Quick = TimeSpan.FromMilliseconds(160);
+    static readonly IEasingFunction Ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+
+    // The chosen tile grows and glows in its color; the others step back.
+    static void Highlight(Border tile, bool on)
+    {
+        if (tile.RenderTransform is not ScaleTransform scale || scale.IsFrozen) tile.RenderTransform = scale = new ScaleTransform(1, 1);
+        double to = on ? 1.1 : 1;
+        var grow = new DoubleAnimation(to, Quick) { EasingFunction = Ease };
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+        if (tile.Opacity > 0.5) tile.BeginAnimation(OpacityProperty, new DoubleAnimation(on ? 1 : 0.82, Quick));
+        tile.BorderBrush = on ? Brushes.White : new SolidColorBrush(Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF));
+        tile.BorderThickness = new Thickness(on ? 4 : 1.5);
+        if (tile.Effect is DropShadowEffect shadow)
+        {
+            var color = tile.Tag is Color c ? c : Colors.White;
+            shadow.Color = on ? Shade(color, 1.3) : Colors.Black;
+            shadow.BlurRadius = on ? 60 : 28;
+            shadow.ShadowDepth = on ? 0 : 8;
+            shadow.Opacity = on ? 0.85 : 0.55;
+        }
+    }
+
+    // The background's glow takes the chosen tile's color, smoothly.
+    void Tint(Color color) =>
+        _glow.BeginAnimation(GradientStop.ColorProperty, new ColorAnimation(Color.FromArgb(0x78, color.R, color.G, color.B), TimeSpan.FromMilliseconds(400)) { EasingFunction = Ease });
+
+    // "A  Open" becomes a round button badge and its words.
+    void SetHints(IEnumerable<string> hints)
+    {
+        _hints.Children.Clear();
+        foreach (var hint in hints)
+        {
+            int gap = hint.IndexOf("  ", StringComparison.Ordinal);
+            string button = gap > 0 ? hint[..gap].Trim() : "", words = gap > 0 ? hint[gap..].Trim() : hint;
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(22, 4, 22, 4) };
+            if (button.Length > 0)
+            {
+                row.Children.Add(new Border
+                {
+                    MinWidth = 40, Height = 40, CornerRadius = new CornerRadius(20), Padding = new Thickness(button.Length > 1 ? 12 : 0, 0, button.Length > 1 ? 12 : 0, 0),
+                    Background = new SolidColorBrush(Color.FromArgb(0xE6, 0xFF, 0xFF, 0xFF)), VerticalAlignment = VerticalAlignment.Center,
+                    Child = new TextBlock { Text = button, FontSize = 20, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Ink), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+                });
+            }
+            row.Children.Add(new TextBlock { Text = words, FontSize = 26, Opacity = 0.9, Margin = new Thickness(12, 0, 0, 2), VerticalAlignment = VerticalAlignment.Center });
+            _hints.Children.Add(row);
+        }
+    }
+
+    void UpdateClock()
+    {
+        _clock.Text = DateTime.Now.ToString("t");
+        string date = DateTime.Now.ToString("dddd d MMMM");
+        _date.Text = date.Length > 0 ? char.ToUpper(date[0]) + date[1..] : "";
+    }
 
     void Select(int index)
     {
@@ -348,36 +522,28 @@ sealed class TvMenuWindow : Window, ITvMenuView
         foreach (var card in new[] { _musicCard, _audioCard })
         {
             bool on = _inBar && _barItem < bar.Count && bar[_barItem] == card;
-            card.BorderThickness = new Thickness(on ? 5 : 0);
+            card.BorderThickness = new Thickness(on ? 4 : 0);
             card.RenderTransform = new ScaleTransform(on ? 1.04 : 1, on ? 1.04 : 1);
         }
         if (_inBar)
         {
-            foreach (var tile in _tiles)
-            {
-                tile.BorderThickness = new Thickness(0);
-                tile.RenderTransform = new ScaleTransform(1, 1);
-            }
+            foreach (var tile in _tiles) Highlight(tile, false);
             _selected = index;
-            _hints.Text = bar[_barItem] == _musicCard
-                ? string.Join("        ", S.HintPlayPause, S.HintSkip, S.HintMusicVolume, S.HintBackToTiles)
-                : string.Join("        ", S.HintNextOutput, S.HintWindowsVolume, S.HintBackToTiles);
+            SetHints(bar[_barItem] == _musicCard
+                ? new[] { S.HintPlayPause, S.HintSkip, S.HintMusicVolume, S.HintBackToTiles }
+                : new[] { S.HintNextOutput, S.HintWindowsVolume, S.HintBackToTiles });
             return;
         }
 
         if (_tiles.Count == 0) return;
         _selected = index;
-        for (int i = 0; i < _tiles.Count; i++)
-        {
-            bool on = i == index;
-            _tiles[i].BorderThickness = new Thickness(on ? 6 : 0);
-            _tiles[i].RenderTransform = new ScaleTransform(on ? 1.08 : 1, on ? 1.08 : 1);
-        }
+        for (int i = 0; i < _tiles.Count; i++) Highlight(_tiles[i], i == index);
+        if (index < _tiles.Count && _tiles[index].Tag is Color tint) Tint(tint);
         bool open = _selected < _apps.Count && _open.Contains(_apps[_selected].Key);
         var parts = new List<string> { open ? S.HintResume : S.HintOpen };
         if (open) parts.Add(S.HintCloseApp);
         parts.Add(_current != null ? string.Format(S.HintBackTo, _current) : S.HintCloseMenu);
-        _hints.Text = string.Join("        ", parts);
+        SetHints(parts);
     }
 
     public void Handle(PadAction action) => Dispatcher.BeginInvoke(() =>

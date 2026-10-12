@@ -24,13 +24,16 @@ jobs:
         with:
           name: bptv-win-x64
           path: publish/bptv.exe
-      # The navigation extension, zipped as the Edge Add-ons store wants it.
-      - run: Compress-Archive -Path src/BigPictureTV.Core/TvMenu/Extension/* -DestinationPath publish/tv-menu-extension.zip
-        shell: pwsh
+      # The navigation extension as the Edge Add-ons store wants it. GitHub
+      # zips each artifact on download, so this one downloads as the package
+      # itself, with the extension's files at the top (no zip inside a zip).
       - uses: actions/upload-artifact@v4
         with:
-          name: tv-menu-extension
+          name: tv-menu-extension-store-package
+          path: src/BigPictureTV.Core/TvMenu/Extension/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tv-menu-extension-store-listing
           path: |
-            publish/tv-menu-extension.zip
             docs/edge-store/logo-300.png
             docs/edge-store/listing.md
