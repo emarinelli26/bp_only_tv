@@ -37,3 +37,21 @@ public class BigPictureWatcherTests
         Assert.True(BigPictureWatcher.Decide(Snap(BigPictureWindow.Hidden, extra: true), true));
     }
 }
+
+public class BigPictureTitleTests
+{
+    static readonly string[] Titles = { "Steam Big Picture Mode", "Steam Big Picture" };
+
+    [Theory]
+    [InlineData("Steam Big Picture Mode", null, true)]
+    [InlineData("steam big picture mode", "anything", true)]
+    [InlineData("Modo Big Picture de Steam", "steamwebhelper", true)]   // Steam in Spanish
+    [InlineData("Steam Big Picture-Modus", "steamwebhelper", true)]     // German
+    [InlineData("Mode Big Picture de Steam", "Steam", true)]            // French
+    [InlineData("Modo Big Picture de Steam", null, false)]              // owner unknown
+    [InlineData("Big Picture tips - YouTube", "msedge", false)]         // a web page about it
+    [InlineData("Steam", "steamwebhelper", false)]                      // the normal Steam window
+    [InlineData("", "steamwebhelper", false)]
+    public void KnowsBigPictureInAnyLanguage(string title, string? process, bool expected) =>
+        Assert.Equal(expected, BigPictureWatcher.IsBigPictureTitle(title, process, Titles));
+}

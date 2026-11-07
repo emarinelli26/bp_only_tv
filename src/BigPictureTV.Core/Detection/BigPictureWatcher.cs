@@ -49,6 +49,12 @@ public sealed class BigPictureWatcher : IBigPictureProbe
     IntPtr _tracked;
     BigPictureSnapshot? _last;
 
+    /// <summary>Processes of the Steam client, which own the Big Picture window.</summary>
+    static readonly string[] SteamProcesses = { "steamwebhelper", "steam" };
+
+    /// <summary>The Big Picture window being followed, if any (zero when none).</summary>
+    public IntPtr Tracked => _tracked;
+
     /// <param name="onlyWhileOnScreen">
     /// True: Big Picture counts as closed as soon as it is minimized or hidden
     /// (the user's "go back to the desktop when I leave Big Picture" option).
@@ -56,7 +62,7 @@ public sealed class BigPictureWatcher : IBigPictureProbe
     public BigPictureWatcher(IEnumerable<string> titles, IEnumerable<string> extraProcesses,
         bool onlyWhileOnScreen = false, ILog? log = null)
     {
-        _titles = titles.Where(t => !string.IsNullOrWhiteSpace(t)).ToArray();
+        _titles = titles.Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t.Trim()).ToArray();
         _processes = NormalizeProcessNames(extraProcesses);
         _onlyWhileOnScreen = onlyWhileOnScreen;
         _log = log;
@@ -96,6 +102,7 @@ public sealed class BigPictureWatcher : IBigPictureProbe
 
     BigPictureWindow FindWindow()
     {
+        // No titles in the settings turns the window check off (extra programs only).
         if (_titles.Length == 0) return BigPictureWindow.None;
 
         if (_tracked != IntPtr.Zero && NativeMethods.IsWindow(_tracked) && TitleMatches(_tracked))
@@ -118,10 +125,47 @@ public sealed class BigPictureWatcher : IBigPictureProbe
         : NativeMethods.IsIconic(hWnd) ? BigPictureWindow.Minimized
         : BigPictureWindow.Visible;
 
+    /// <summary>True if this window is Big Picture's (whether or not it is on screen).</summary>
+    public bool IsBigPictureWindow(IntPtr hWnd) => TitleMatches(hWnd);
+
     bool TitleMatches(IntPtr hWnd)
     {
         string title = TitleOf(hWnd);
-        return title.Length > 0 && _titles.Any(t => string.Equals(title, t, StringComparison.OrdinalIgnoreCase));
+        if (title.Length == 0) return false;
+        if (IsBigPictureTitle(title, null, _titles)) return true;
+        // Only worth asking which program owns it when the title could be Big Picture's.
+        return title.Contains("Big Picture", StringComparison.OrdinalIgnoreCase)
+            && IsBigPictureTitle(title, ProcessNameOf(hWnd), _titles);
+    }
+
+    /// <summary>
+    /// The rule for a window title: one of the titles from the settings, or,
+    /// for a window of Steam itself, any title with "Big Picture" in it, which
+    /// Steam keeps in every language ("Modo Big Picture de Steam",
+    /// "Steam Big Picture-Modus"...), so no setting is needed for those.
+    /// </summary>
+    public static bool IsBigPictureTitle(string title, string? processName, IReadOnlyCollection<string> titles)
+    {
+        if (title.Length == 0) return false;
+        if (titles.Any(t => string.Equals(title, t, StringComparison.OrdinalIgnoreCase))) return true;
+        return processName != null
+            && SteamProcesses.Contains(processName, StringComparer.OrdinalIgnoreCase)
+            && title.Contains("Big Picture", StringComparison.OrdinalIgnoreCase);
+    }
+
+    static string? ProcessNameOf(IntPtr hWnd)
+    {
+        NativeMethods.GetWindowThreadProcessId(hWnd, out uint pid);
+        if (pid == 0) return null;
+        try
+        {
+            using var process = Process.GetProcessById((int)pid);
+            return process.ProcessName;
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException)
+        {
+            return null; // gone meanwhile
+        }
     }
 
     // The regular Steam client window, shown when the user exits Big Picture to the desktop.
