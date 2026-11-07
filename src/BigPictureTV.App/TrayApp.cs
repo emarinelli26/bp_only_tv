@@ -28,6 +28,7 @@ public sealed class TrayApp : IDisposable
     BigPictureWatcher _probe;
     readonly NotifyIcon _icon;
     readonly Timer _timer;
+    readonly WindowEvents _windowEvents;
     readonly HotkeyService _hotkeys;
     readonly GamepadService _gamepad;
     readonly TvSession _tvMenu;
@@ -71,6 +72,12 @@ public sealed class TrayApp : IDisposable
         _timer = new Timer { Interval = Math.Clamp(_settings.PollSeconds, 1, 60) * 1000 };
         _timer.Tick += (_, _) => Check();
         _timer.Start();
+
+        // Big Picture opening, hiding or closing is acted on right away; the
+        // timer above still checks regularly (the displays, extra programs).
+        _windowEvents = new WindowEvents(hWnd => hWnd == _probe.Tracked || _probe.IsBigPictureWindow(hWnd));
+        _windowEvents.Changed += () => { if (_timer.Enabled && !_disposed) Check(); }; // not during Settings' Test
+        if (!_windowEvents.Working) _log.Write("Windows didn't allow listening for window changes; checking every few seconds only.");
 
         _hotkeys = new HotkeyService(log);
         _hotkeys.TogglePressed += OnToggleShortcut;
@@ -354,7 +361,7 @@ public sealed class TrayApp : IDisposable
         {
             var displays = _display.ListDisplays();
             var (tv, reason) = TvSelector.Select(displays, _settings);
-            string report = DiagnosticReport.Build(UpdateChecker.Current.ToString(3),
+            string report = DiagnosticReport.Build(UpdateChecker.Current,
                 $"{System.Runtime.InteropServices.RuntimeInformation.OSDescription} (app holds {GuiResources.UserObjects} USER, {GuiResources.GdiObjects} GDI objects)",
                 displays, tv, reason, _settings,
                 _controller.Mode, DiagnosticReport.Tail(AppPaths.LogFile, 40));
@@ -600,6 +607,7 @@ public sealed class TrayApp : IDisposable
         if (_disposed) return;
         _disposed = true;
         _timer.Stop();
+        _windowEvents.Dispose();
         _updateTimer.Dispose();
         _handleTimer.Dispose();
         _hotkeys.Dispose();

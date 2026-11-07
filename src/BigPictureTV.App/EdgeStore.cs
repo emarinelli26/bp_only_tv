@@ -49,12 +49,13 @@ static class EdgeStore
     /// extension's switch in edge://extensions, or its store page (Get) if
     /// Edge hasn't installed it there yet.
     /// </summary>
-    public static void AskToTurnOn(string browser, string profileDir, string tile, ILog log)
+    /// <returns>True if it asked (the window is opening).</returns>
+    public static bool AskToTurnOn(string browser, string profileDir, string tile, ILog log)
     {
         bool? state = StateIn(profileDir);
-        if (state == true) return;
+        if (state == true) return false;
         lock (Asked)
-            if (!Asked.Add(profileDir)) return;
+            if (!Asked.Add(profileDir)) return false;
         string page = state == false
             ? $"edge://extensions/?id={SpatialNav.EdgeStoreId}"
             : $"https://microsoftedge.microsoft.com/addons/detail/{SpatialNav.EdgeStoreId}";
@@ -72,6 +73,25 @@ static class EdgeStore
             catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException)
             {
                 log.Write($"Couldn't open {page}: {e.Message}");
+            }
+        });
+        return true;
+    }
+
+    /// <summary>
+    /// Waits (up to a few minutes) for the extension to be turned on in the
+    /// profile, then runs <paramref name="on"/> once; nothing if it never is.
+    /// </summary>
+    public static void WhenOn(string profileDir, Action on)
+    {
+        _ = System.Threading.Tasks.Task.Run(async () =>
+        {
+            for (int i = 0; i < 90; i++)
+            {
+                await System.Threading.Tasks.Task.Delay(TimeSpan.FromSeconds(2));
+                if (!OnIn(profileDir)) continue;
+                on();
+                return;
             }
         });
     }

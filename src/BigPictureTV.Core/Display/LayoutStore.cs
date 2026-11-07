@@ -26,8 +26,7 @@ public sealed class LayoutStore
             Modes = ToBase64(layout.Modes),
             Active = active?.ToArray(),
         };
-        Directory.CreateDirectory(Path.GetDirectoryName(_file)!);
-        File.WriteAllText(_file, JsonSerializer.Serialize(dto, new JsonSerializerOptions { WriteIndented = true }));
+        SafeFile.WriteAllText(_file, JsonSerializer.Serialize(dto, new JsonSerializerOptions { WriteIndented = true }));
     }
 
     /// <summary>The saved layout. Throws if the file is missing or unreadable.</summary>
