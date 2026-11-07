@@ -117,37 +117,62 @@ public sealed class AppSettings
     public AppSettings Clone() =>
         JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(this, JsonOptions), JsonOptions)!;
 
-    /// <summary>Loads settings, or returns defaults if the file is missing or broken.</summary>
+    /// <summary>
+    /// Loads settings. A broken file is put aside as settings.json.broken and
+    /// the copy from before the last save takes its place; defaults only if
+    /// neither can be read.
+    /// </summary>
     public static AppSettings Load(string file, ILog? log = null)
     {
         if (!File.Exists(file)) return Fresh();
         try
         {
-            var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(file), JsonOptions) ?? new AppSettings();
-            settings.TvMenuApps ??= TvApp.Defaults();
-            TvApp.UpdateUserAgents(settings.TvMenuApps);
-            if (settings.TvMenuVersion < TvApp.DefaultsVersion)
-            {
-                // New tiles appear once; removing them afterwards sticks.
-                TvApp.AddNewDefaults(settings.TvMenuApps, settings.TvMenuVersion);
-                settings.TvMenuVersion = TvApp.DefaultsVersion;
-                try { settings.Save(file); }
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { log?.Write($"Couldn't save the new TV menu tiles: {e.Message}"); }
-            }
-            return settings;
+            return Read(file, log);
         }
-        catch (Exception e) when (e is JsonException or IOException)
+        catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
         {
-            log?.Write($"Settings file unreadable ({e.Message}), using defaults.");
-            return Fresh();
+            log?.Write($"Settings file unreadable ({e.Message}).");
         }
+
+        string backup = SafeFile.BackupOf(file);
+        try
+        {
+            if (File.Exists(backup))
+            {
+                File.Copy(file, file + ".broken", overwrite: true);
+                File.Copy(backup, file, overwrite: true);
+                var settings = Read(file, log);
+                log?.Write("Using the settings from before the last save; the broken file is kept as settings.json.broken.");
+                return settings;
+            }
+        }
+        catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
+        {
+            log?.Write($"Settings backup unreadable too ({e.Message}).");
+        }
+        log?.Write("Using the default settings.");
+        return Fresh();
+    }
+
+    static AppSettings Read(string file, ILog? log)
+    {
+        var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(file), JsonOptions) ?? new AppSettings();
+        settings.TvMenuApps ??= TvApp.Defaults();
+        TvApp.UpdateUserAgents(settings.TvMenuApps);
+        if (settings.TvMenuVersion < TvApp.DefaultsVersion)
+        {
+            // New tiles appear once; removing them afterwards sticks.
+            TvApp.AddNewDefaults(settings.TvMenuApps, settings.TvMenuVersion);
+            settings.TvMenuVersion = TvApp.DefaultsVersion;
+            try { settings.Save(file); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { log?.Write($"Couldn't save the new TV menu tiles: {e.Message}"); }
+        }
+        return settings;
     }
 
     static AppSettings Fresh() => new() { TvMenuVersion = TvApp.DefaultsVersion };
 
-    public void Save(string file)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
-        File.WriteAllText(file, JsonSerializer.Serialize(this, JsonOptions));
-    }
+    /// <summary>Saves without ever leaving a half-written file; the previous one stays as settings.json.bak.</summary>
+    public void Save(string file) =>
+        SafeFile.WriteAllText(file, JsonSerializer.Serialize(this, JsonOptions), keepBackup: true);
 }
