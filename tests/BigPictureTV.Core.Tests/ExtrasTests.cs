@@ -46,4 +46,24 @@ public class ReleaseVersionTests
         Assert.False(ReleaseVersion.IsNewer("v0.5.9", mine));
         Assert.False(ReleaseVersion.IsNewer("nonsense", mine));
     }
+
+    [Theory]
+    [InlineData("v2.0.0", "2.0.0-beta.1", true)]      // the final version after testing it
+    [InlineData("v2.0.0-beta.2", "2.0.0-beta.1", true)]
+    [InlineData("v2.0.0-beta.10", "2.0.0-beta.9", true)]
+    [InlineData("v2.0.0-rc.1", "2.0.0-beta.3", true)]
+    [InlineData("v2.0.0-beta.1", "2.0.0", false)]     // never back to a test version
+    [InlineData("v2.0.0-beta.1", "1.0.0", true)]
+    [InlineData("v2.0.0", "2.0.0", false)]
+    [InlineData("v2.0.0-beta.1", "2.0.0-beta.1+74d7e91", false)]
+    [InlineData("v1.0.0", "2.0.0-beta.1", false)]
+    public void TestVersionsComeBeforeTheFinalOne(string tag, string current, bool newer) =>
+        Assert.Equal(newer, ReleaseVersion.IsNewer(tag, current));
+
+    [Theory]
+    [InlineData("2.0.0-beta.1", true)]
+    [InlineData("2.0.0-beta.1+74d7e91", true)]
+    [InlineData("2.0.0+74d7e91", false)]
+    [InlineData("1.0.0", false)]
+    public void KnowsTestVersions(string version, bool test) => Assert.Equal(test, ReleaseVersion.IsTestVersion(version));
 }

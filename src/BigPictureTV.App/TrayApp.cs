@@ -354,7 +354,7 @@ public sealed class TrayApp : IDisposable
         {
             var displays = _display.ListDisplays();
             var (tv, reason) = TvSelector.Select(displays, _settings);
-            string report = DiagnosticReport.Build(UpdateChecker.Current.ToString(3),
+            string report = DiagnosticReport.Build(UpdateChecker.Current,
                 $"{System.Runtime.InteropServices.RuntimeInformation.OSDescription} (app holds {GuiResources.UserObjects} USER, {GuiResources.GdiObjects} GDI objects)",
                 displays, tv, reason, _settings,
                 _controller.Mode, DiagnosticReport.Tail(AppPaths.LogFile, 40));

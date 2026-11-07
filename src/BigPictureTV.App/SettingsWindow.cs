@@ -218,7 +218,7 @@ public sealed class SettingsWindow : Window
 
         _checkUpdates = new CheckBox
         {
-            Content = new TextBlock { Text = string.Format(S.CheckForUpdates, UpdateChecker.Current.ToString(3)), TextWrapping = TextWrapping.Wrap },
+            Content = new TextBlock { Text = string.Format(S.CheckForUpdates, UpdateChecker.Current), TextWrapping = TextWrapping.Wrap },
             IsChecked = _draft.CheckForUpdates,
             Margin = new Thickness(0, 10, 0, 0),
         };
