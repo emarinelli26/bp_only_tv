@@ -69,7 +69,91 @@ Right-click the icon → **Settings…**
 
 ## TV menu
 
-A tap on the controller's **Share/View** button (or the keyboard shortcut) opens the **TV menu** on the TV from anywhere: big tiles for YouTube, Crunchyroll, Big Picture and the desktop. The tray icon opens it too, and the buttons (one or several, tapped or held up to 5 s) can be changed or turned off in Settings. Like on a console, going back to the menu leaves the app running: its tile says "Open", A goes back to it and X closes it. Going back to the desktop (from the menu, the shortcut or the tray) closes them all, music too. Each tile shows its logo on its own: the icon the page declares (kept in `%LOCALAPPDATA%\BigPictureTV\Icons`; if the page doesn't answer, say behind a bot check, Google's icon service is asked), or the program's icon (Spotify, Steam for Big Picture, the game in front); a tile's `Icon` (an image, a program or a web address) picks another. Opening the menu over a game (or any other window) adds a green tile with its name first, which shows the open windows to pick the one to go back to (A twice goes back to the first); B and the menu button go back to the game too when it was the one in front. Web tiles open full screen in Microsoft Edge with TV menu profiles of their own, never signed in to a Microsoft account or synced, so your everyday extensions and settings stay out (plain pages like Crunchyroll share one, so the navigation extension is set up once for all of them; YouTube and music tiles keep their own), and the app drives the page directly like a console app: cross = arrows, A = Enter, B = back, Y = search, Start = pause, and on YouTube the buttons do what they do in the PS5 app: LB/RB = previous/next video, LT/RT = rewind/fast forward, Y/Triangle opens search (a space inside it), X/Square deletes, and on the keyboard LT/RT jump 4 keys (on other pages, like Crunchyroll, a small extension (Edge installs it from its store by itself, turned off until it is turned on; the first time a page needs it, the app opens a normal window of that profile where one click turns it on (or adds it from the store); it only acts in TV menu windows) moves an orange focus box between links and buttons with the cross, A opens the one chosen, Y goes to the page's search, LB/RB move between items and LT/RT scroll; inside an embedded video player the cross goes to the player; with a video on the page, LT/RT go back and forward 10 s and X/Square makes the player fill the window, where the cross seeks and A pauses). On those pages Y also brings up an on-screen keyboard at the bottom of the TV, and R3 (right stick click) opens or closes it over any text box, for example to sign in: the cross chooses a key, A types it, X deletes, Y types a space, LT capitals (one letter), RT symbols and accents, LB/RB move the cursor, Start sends Enter and closes it, B closes it. Spotify (its desktop app if installed, else the web player) and YouTube Music tiles keep playing behind the menu, Big Picture and games, and under the tiles the menu shows what the PC is playing (from any player, with its cover) and the sound output in use: press down to reach them, A on the music plays or pauses, A on the output moves the sound to the next one (TV, headphones, speakers), and LB/RB skip and Start pauses from anywhere in the menu. The right stick turns only the volume of the music opened from the TV menu (its own slider in Windows' volume mixer, so games, videos and other apps keep theirs; closing it gives back the volume it had, so Edge or Spotify aren't left low), in the menu or over the menu's apps (in a game the stick is the game's), showing the percentage at the top of the screen; on the sound output it turns the whole PC's volume. When TV mode starts, the menu opens or closes, or an app opens from it, the mouse pointer moves to the bottom right corner, out of the way. Xbox, PlayStation and Switch controllers work. To open it from Big Picture, add `BigPictureTV.exe` as a non-Steam game with `--menu` as its launch option, and give it the Gamepad controller template. Tiles live in `TvMenuApps` in `settings.json`; [README.es.md](README.es.md#menú-tv) describes the fields.
+A tap on the controller's **Share/View** button (or the keyboard shortcut) opens
+the **TV menu** on the TV from anywhere: the desktop, Big Picture or a game. It
+has big tiles for YouTube, Crunchyroll, Big Picture and the desktop. With the
+menu open, the same button goes back to the app you were using; if there is
+none, the menu stays on screen (the Desktop tile or B goes back to the
+desktop). The tray icon opens it too. The buttons (one or several, tapped or
+held up to 5 s) can be changed or turned off in Settings → Advanced options →
+TV menu.
+
+- **In the menu:** the cross or left stick moves, A opens, B goes back.
+- **Like a console:** going back to the menu doesn't close the app. It stays
+  open behind it, its tile says "Open", A goes back to it and X closes it.
+  Several can be open at once (music while you play, for example). Going back
+  to the desktop (from the menu, the shortcut or the tray) closes them all,
+  music too. Opening the menu over a game (or any other window) adds a green
+  tile with its name first, which shows the open windows to pick the one to go
+  back to (A twice goes back to the first); B and the menu button go back to
+  the game too when it was the one in front. When TV mode starts, the menu
+  opens or closes, or an app opens from it, the mouse pointer moves to the
+  bottom right corner, out of the way.
+- **On a web page:** it opens full screen in Microsoft Edge, with TV menu
+  profiles of its own (sign-ins to the sites are kept; they never sign in to
+  your Microsoft account or sync, so your everyday extensions and settings
+  stay out). Plain pages like Crunchyroll share one, so the navigation
+  extension is set up once for all of them; YouTube and the music tiles keep
+  their own. The app drives the page directly: cross = arrows, A = Enter,
+  B = back, Y = search, Start = pause.
+  - **YouTube** uses its TV interface (youtube.com/tv), made for a controller,
+    with its own keyboard. The buttons do what they do in the PS5 app: LB/RB =
+    previous/next video, LT/RT = rewind/fast forward, Y/Triangle opens search
+    (a space inside it), X/Square deletes, and on the keyboard LT/RT jump 4
+    keys.
+  - **Other pages**, like Crunchyroll, use a small extension: the cross moves
+    an orange focus box between links and buttons, A opens the one chosen,
+    Y goes to the page's search, LB/RB move between items and LT/RT scroll.
+    Inside an embedded video player the cross goes to the player. With a video
+    on the page, LT/RT go back and forward 10 s and X/Square makes the player
+    fill the window, where the cross seeks and A pauses. Edge installs the
+    extension from its store by itself, turned off until you turn it on: the
+    first time a page needs it, the app opens a normal window of that profile
+    where one click turns it on (or adds it from the store). It only acts in
+    TV menu windows.
+- **On-screen keyboard:** on those other pages, Y also brings up a keyboard at
+  the bottom of the TV, and R3 (right stick click) opens or closes it over any
+  text box, for example to sign in. It works like a console's: the cross picks
+  a key, A types it, X deletes, Y types a space, LT capitals (one letter), RT
+  symbols and accents, LB/RB move the cursor, Start sends Enter and closes it,
+  B closes it. If R3 is the TV menu button, only Y opens it.
+- **Music and sound output:** the Spotify (its desktop app if installed, else
+  the web player) and YouTube Music tiles keep playing when you go back to the
+  menu, Big Picture or a game. Under the tiles, the menu shows what the PC is
+  playing (from any player, with its cover) and the sound output in use. Press
+  down to reach them: A on the music plays or pauses, A on the output moves
+  the sound to the next one (TV, headphones, speakers). LB/RB skip and Start
+  pauses from anywhere in the menu.
+- **Volume:** the right stick turns only the volume of the music opened from
+  the TV menu (its own slider in Windows' volume mixer, so games, videos and
+  other apps keep theirs; closing it gives back the volume it had, so Edge or
+  Spotify aren't left low), in the menu or over the menu's apps (in a game the
+  stick is the game's), and shows the percentage at the top of the screen. On
+  the sound output it turns the whole PC's volume.
+- **Controllers:** Xbox, PlayStation (DualShock 4, DualSense), Switch and
+  others.
+
+### From Big Picture
+
+Add `BigPictureTV.exe` as a non-Steam game, with `--menu` as its launch option.
+Opening it from Big Picture shows the TV menu, and Steam counts it as a game
+running until the menu closes. In that shortcut's controller settings, choose
+the **Gamepad** template (not the desktop one), so Steam doesn't send keys on
+top of the app.
+
+### Editing the tiles
+
+They live in `%LOCALAPPDATA%\BigPictureTV\settings.json`, under `TvMenuApps`.
+Each has a `Name`, a `Kind` (`Web`, `Program`, `BigPicture` or `Desktop`), a
+`Target` (web address or program path), and optionally `Arguments`,
+`UserAgent`, `BackKey` (the key for B, like `Esc` or `Alt+Left`), `SearchKey`
+(for Y), `Color` (`#RRGGBB`) and `Icon` (an image, a program or a web address
+for the logo). Changes show the next time the menu opens.
+
+Each tile shows its logo on its own: the icon the page declares (kept in
+`%LOCALAPPDATA%\BigPictureTV\Icons`; if the page doesn't answer, say behind a
+bot check, Google's icon service is asked), or the program's icon (Spotify,
+Steam for Big Picture, the game in front). `Icon` picks another.
 
 ## Stuck on the TV?
 
@@ -78,19 +162,32 @@ Press `Ctrl+Alt+Shift+F12`. If the app isn't running, press `Win+P` and choose
 
 ## FAQ
 
-**Does it send anything over the internet?** Only the optional new-version
-check, which asks GitHub for the latest release once a day. No telemetry. It
-never downloads or installs anything by itself.
+**Does it send anything over the internet?** No telemetry. It connects to:
 
-**Where does it keep its files?** `%LOCALAPPDATA%\BigPictureTV`: settings, the
-saved desktop layout while on the TV, and a log.
+- GitHub, once a day, to see if there is a new version (can be turned off).
+  It never downloads or installs a new version by itself.
+- The sites of the TV menu's web tiles, when you open them, and their icons:
+  from the site, or from Google's icon service (`www.google.com/s2/favicons`)
+  if the site doesn't answer.
+- Microsoft's Edge Add-ons store, where Edge gets the navigation extension
+  for the TV menu's web pages.
+
+Without the TV menu, only the new-version check.
+
+**Where does it keep its files?** `%LOCALAPPDATA%\BigPictureTV`: the settings
+(`settings.json`, and `settings.json.bak` from before the last change), the
+saved desktop layout while on the TV, the TV menu's browser profiles and
+icons, and a log (`BigPictureTV.log`, about 1 MB at most, plus the previous
+one as `BigPictureTV.old.log`).
 
 **How do I uninstall it?** Untick **Start with Windows**, exit from the menu,
 and delete the exe and the `%LOCALAPPDATA%\BigPictureTV` folder.
 
-**Big Picture isn't detected.** It looks for windows titled *Steam Big Picture
-Mode* or *Steam Big Picture*. If your Steam language uses another title, add it
-to `BigPictureTitles` in `settings.json` and open an issue so it can be built in.
+**Big Picture isn't detected.** It looks for a Steam window with *Big
+Picture* in its title, which Steam keeps in most languages, and for the titles
+in `BigPictureTitles` in `settings.json` (*Steam Big Picture Mode* and *Steam
+Big Picture*). If your Steam language calls it something else, add that title
+there and open an issue so it can be built in.
 
 **Something went wrong.** Right-click the icon → **Copy diagnostic info**, and
 paste it in a [new issue](https://github.com/emarinelli26/bp_only_tv/issues/new/choose).

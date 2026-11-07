@@ -141,7 +141,7 @@ public sealed class BigPictureWatcher : IBigPictureProbe
     /// <summary>
     /// The rule for a window title: one of the titles from the settings, or,
     /// for a window of Steam itself, any title with "Big Picture" in it, which
-    /// Steam keeps in every language ("Modo Big Picture de Steam",
+    /// Steam keeps in most languages ("Modo Big Picture de Steam",
     /// "Steam Big Picture-Modus"...), so no setting is needed for those.
     /// </summary>
     public static bool IsBigPictureTitle(string title, string? processName, IReadOnlyCollection<string> titles)

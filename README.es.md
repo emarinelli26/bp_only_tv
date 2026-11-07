@@ -100,20 +100,32 @@ arranca, si las pantallas siguen en la TV (si el escritorio ya volvió, lo deja 
 
 ## Preguntas frecuentes
 
-**¿Manda algo por internet?** Solo el chequeo opcional de versión nueva, que le
-pregunta a GitHub por el último release una vez por día. Sin telemetría. Nunca
-descarga ni instala nada por su cuenta.
+**¿Manda algo por internet?** Sin telemetría. Se conecta a:
 
-**¿Dónde guarda sus archivos?** En `%LOCALAPPDATA%\BigPictureTV`: ajustes, el
-diseño de pantallas guardado mientras estás en la TV, y un registro.
+- GitHub, una vez por día, para ver si hay una versión nueva (se puede
+  apagar). Nunca descarga ni instala una versión nueva por su cuenta.
+- Los sitios de los mosaicos web del Menú TV, cuando los abrís, y sus íconos:
+  del sitio, o del servicio de íconos de Google (`www.google.com/s2/favicons`)
+  si el sitio no responde.
+- La tienda de complementos de Edge, de donde Edge baja la extensión de
+  navegación para las páginas del Menú TV.
+
+Sin el Menú TV, solo el chequeo de versión nueva.
+
+**¿Dónde guarda sus archivos?** En `%LOCALAPPDATA%\BigPictureTV`: los ajustes
+(`settings.json`, y `settings.json.bak` de antes del último cambio), el diseño
+de pantallas guardado mientras estás en la TV, los perfiles de navegador y los
+íconos del Menú TV, y un registro (`BigPictureTV.log`, de 1 MB como mucho, más
+el anterior como `BigPictureTV.old.log`).
 
 **¿Cómo la desinstalo?** Destildá **Iniciar con Windows**, salí desde el menú y
 borrá el exe y la carpeta `%LOCALAPPDATA%\BigPictureTV`.
 
-**No detecta Big Picture.** Busca ventanas con el título *Steam Big Picture
-Mode* o *Steam Big Picture*. Si en tu idioma de Steam el título es otro,
-agregalo en `BigPictureTitles` dentro de `settings.json` y abrí un issue para
-sumarlo.
+**No detecta Big Picture.** Busca una ventana de Steam con *Big Picture* en el
+título, que Steam mantiene en la mayoría de los idiomas, y los títulos de
+`BigPictureTitles` en `settings.json` (*Steam Big Picture Mode* y *Steam Big
+Picture*). Si en tu idioma de Steam se llama de otra forma, agregá ese título
+ahí y abrí un issue para sumarlo.
 
 **Algo salió mal.** Clic derecho en el ícono → **Copiar info de diagnóstico**,
 y pegala en un [issue nuevo](https://github.com/emarinelli26/bp_only_tv/issues/new/choose).
